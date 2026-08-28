@@ -32,28 +32,38 @@ export default function Auth({ onLoginSuccess }) {
   }
 
   return (
-    <div style={{ maxWidth: '360px', margin: '4rem auto', padding: '1.5rem', border: '1px solid #ccc', borderRadius: '8px' }}>
+    <div style={{ padding: '20px', maxWidth: '400px', margin: 'auto' }}>
       <h2>{isSignUp ? 'Create Account' : 'Log In to OpenGym'}</h2>
       {errorMsg && <p style={{ color: 'red' }}>{errorMsg}</p>}
       <form onSubmit={handleAuth}>
-        <div style={{ marginBottom: '1rem' }}>
+        <div style={{ marginBottom: '10px' }}>
           <label style={{ display: 'block', marginBottom: '0.25rem' }}>Email</label>
           <input
             type="email"
             value={email}
             onChange={e => setEmail(e.target.value)}
+            placeholder="Enter your email"
             required
-            style={{ width: '100%', padding: '0.5rem', boxSizing: 'border-box' }}
+            style={{
+              display: 'block', width: '100%', padding: '0.75rem', marginBottom: '1rem',
+              color: '#ffffff', backgroundColor: '#1e1e1e', border: '1px solid #333333',
+              borderRadius: '6px', outline: 'none', fontSize: '1rem', boxSizing: 'border-box'
+            }}
           />
         </div>
-        <div style={{ marginBottom: '1rem' }}>
+        <div style={{ marginBottom: '10px' }}>
           <label style={{ display: 'block', marginBottom: '0.25rem' }}>Password</label>
           <input
             type="password"
             value={password}
             onChange={e => setPassword(e.target.value)}
+            placeholder="Enter your password"
             required
-            style={{ width: '100%', padding: '0.5rem', boxSizing: 'border-box' }}
+            style={{
+              display: 'block', width: '100%', padding: '0.75rem', marginBottom: '1rem',
+              color: '#ffffff', backgroundColor: '#1e1e1e', border: '1px solid #333333',
+              borderRadius: '6px', outline: 'none', fontSize: '1rem', boxSizing: 'border-box'
+            }}
           />
         </div>
         <button type="submit" disabled={loading} style={{ width: '100%', padding: '0.6rem', marginBottom: '0.75rem' }}>
