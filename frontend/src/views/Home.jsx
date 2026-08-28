@@ -1,27 +1,36 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useStore } from '../store/useStore.js'
+import { useStore, DEF } from '../store/useStore.js'
 import { effectiveRoutine, effectiveRoutineId, streakWeeks, lastBW, setsDoneActive } from '../lib/history.js'
 import { fmtNum, fmtDate, todayISO, isoOf, weekKey, DAYS } from '../lib/format.js'
-import { t, dateLocale } from '../lib/i18n.js'
+import { t as defaultT, dateLocale } from '../lib/i18n.js'
 import { bwSheet, goalSheet, dayOverrideSheet, calendarSheet, startFlow, loadStarterPlan, bwDeltaColor } from '../sheets.jsx'
 import LineChart from '../components/LineChart.jsx'
 import Icon from '../components/Icon.jsx'
 import { Button } from '../components/ui.jsx'
-import { glyphOf } from '../lib/glyphs.js'
 
-// Home = what to do now + a quick glance. Deep charts & history live in Stats.
-export default function Home() {
-  const nav = useNavigate()
-  const S = useStore(s => s.S)
+export default function Home({ onNavigate, state, dispatch, t: propT } = {}) {
+  const routerNavigate = useNavigate()
+  const nav = typeof onNavigate === 'function' ? path => onNavigate(path.replace(/^\//, '')) : routerNavigate
+  const storedState = useStore(s => s.S)
+  const S = {
+    ...DEF,
+    ...(storedState || {}),
+    ...(state || {}),
+    bodyweight: (state || storedState)?.bodyweight || [],
+    routines: (state || storedState)?.routines || [],
+    workouts: (state || storedState)?.workouts || [],
+    week: (state || storedState)?.week || {},
+    dayPlan: (state || storedState)?.dayPlan || {}
+  }
   const user = useStore(s => s.user)
+  const t = typeof propT === 'function' ? propT : defaultT
   const profile = user?.profile
   const greetingName = user?.user_metadata?.full_name || profile?.name || user?.email?.split('@')[0] || 'Sahil'
   const [weekOffset, setWeekOffset] = useState(0)
 
   const today = new Date()
   const routine = effectiveRoutine(S, todayISO())
-  const todayOvr = S.dayPlan[todayISO()] !== undefined
   const bw = lastBW(S)
   const prevBW = S.bodyweight.length > 1 ? S.bodyweight[S.bodyweight.length - 2] : null
   const delta = bw && prevBW ? bw.w - prevBW.w : null
@@ -42,38 +51,28 @@ export default function Home() {
 
   const wThisWeek = S.workouts.filter(w => weekKey(w.d) === weekKey(todayISO())).length
   const plannedPerWeek = Object.keys(S.week).filter(k => S.week[k]).length
+  const completedThisWeek = S.workouts.filter(w => weekKey(w.d) === weekKey(todayISO())).length
   const bwPoints = S.bodyweight.slice(-30).map(b => ({ t: b.t || new Date(b.d).getTime(), y: b.w, d: b.d }))
 
-  // today's session shown right under the week strip
   const onToday = () => { if (S.active) nav('/workout'); else if (routine) startFlow(routine.id); else dayOverrideSheet(todayISO()) }
 
-  return <div className="narrow">
-    <div className="hdr">
-      <div><h1>{user ? t('Hi {0}', greetingName) : 'openGym'}</h1><div className="sub">{today.toLocaleDateString(dateLocale(), { weekday: 'long', day: 'numeric', month: 'long' })}</div></div>
-      <button className="iconbtn" onClick={() => nav('/settings')} aria-label={t('Settings')}><Icon name="gear" /></button>
+  return <div className="narrow" style={hudStyles.container}>
+    <div className="hdr" style={hudStyles.header}>
+      <div>
+        <div style={hudStyles.dateLabel}>{today.toLocaleDateString(dateLocale(), { weekday: 'long', day: 'numeric', month: 'long' }).toUpperCase()}</div>
+        <h1 style={hudStyles.title}>{user ? `Hi ${greetingName}` : 'openGym'}</h1>
+      </div>
+      <button className="iconbtn" style={hudStyles.streakPill} onClick={() => calendarSheet()} aria-label={t('View streak')}><span style={hudStyles.streakLabel}>{t('Workout streak')}</span><span style={hudStyles.fireIcon}>🔥</span><span style={hudStyles.streakNum}>{streakWeeks(S)}</span></button>
     </div>
 
-    <div className="card">
-      <div className="row between" style={{ marginBottom: 8 }}>
+    <div className="card" style={hudStyles.card}>
+      <div className="row between" style={{ ...hudStyles.sectionHeader, marginBottom: 12 }}>
         <button className="iconbtn" style={{ width: 30, height: 30, fontSize: 15 }} onClick={() => setWeekOffset(w => w - 1)} aria-label="Previous week"><Icon name="chevronLeft" /></button>
-        <div className="small muted" style={{ fontWeight: 500 }}>{wkLabel}</div>
+        <div style={hudStyles.cardTitle}>{t("THIS WEEK'S DISCIPLINE")}</div>
+        <div style={hudStyles.highlightBadge}>{completedThisWeek} / {plannedPerWeek || 0} {t('COMPLETED')}</div>
         <button className="iconbtn" style={{ width: 30, height: 30, fontSize: 15 }} onClick={() => setWeekOffset(w => w + 1)} aria-label="Next week"><Icon name="chevronRight" /></button>
       </div>
-      <div className="week">{strip}</div>
-      <div className="today-row" onClick={onToday}>
-        <div className="row" style={{ gap: 9, minWidth: 0 }}>
-          <span className="lrow-i" style={{ background: S.active ? 'var(--orange)' : routine ? 'var(--acc)' : 'var(--surface-3)' }}>
-            <Icon name={S.active ? 'timer' : routine ? glyphOf(routine.emoji) : 'moon'} />
-          </span>
-          <div style={{ minWidth: 0 }}>
-            <div className="lbl2">{t('Today')}</div>
-            <div className="ttl">{S.active ? t('{0} — in progress', S.active.name) : routine ? routine.name : t('Rest day')}{todayOvr && routine ? ' · ' + t('rescheduled') : ''}</div>
-          </div>
-        </div>
-        {S.active ? <span className="tag" style={{ color: 'var(--orange)', background: 'color-mix(in srgb,var(--orange) 16%,transparent)' }}>{t('Resume')}</span>
-          : routine ? <span className="tag acc">{t('Start')}</span>
-          : <Icon name="plus" className="chev" />}
-      </div>
+      <div className="week" style={hudStyles.weekRow}>{strip.map((day, i) => <div key={i} style={hudStyles.dayBox}>{day}</div>)}</div>
     </div>
 
     {!S.routines.length && !S.active && (
@@ -87,6 +86,24 @@ export default function Home() {
         <div style={{ height: 8 }} /><Button onClick={() => nav('/plan')}>{t('Build my own plan')}</Button>
       </div>
     )}
+
+    <div className="card" style={hudStyles.heroCard}>
+      <div className="row between" style={hudStyles.heroTop}>
+        <span style={hudStyles.todayTag}>{t("TODAY'S BLADE")}</span>
+        <span style={hudStyles.timeTag}>{routine ? `${routine.exercises?.length || 0} ${t('EXERCISES')}` : t('REST DAY')}</span>
+      </div>
+      <h2 style={hudStyles.heroTitle}>{routine ? routine.name.toUpperCase() : t('REST DAY')}</h2>
+      <p style={hudStyles.heroDesc}>{routine ? t('{0} exercises scheduled for today', routine.exercises?.length || 0) : t('Recover today. Return stronger tomorrow.')}</p>
+      <Button variant="primary" icon="play" onClick={onToday} style={hudStyles.unleashBtn}>{S.active ? t('Resume workout') : routine ? t('Begin session') : t('Plan today')}</Button>
+    </div>
+
+    <div style={hudStyles.grid}>
+      <div className="card" style={hudStyles.statCard} onClick={() => bwSheet()}>
+        <div style={hudStyles.statLabel}>{t('Body weight')}</div>
+        <div style={hudStyles.statVal}>{bw ? `${fmtNum(bw.w)} ` : '—'}{bw && <span style={hudStyles.unit}>{S.unit}</span>}</div>
+        <div style={hudStyles.statAction}>+ {t('Log entry')}</div>
+      </div>
+    </div>
 
     <div className="card">
       <div className="row between" style={{ marginBottom: 6 }}>
@@ -131,4 +148,39 @@ export default function Home() {
       </div>
     </div>
   </div>
+}
+
+const hudStyles = {
+  container: {
+    minHeight: '100vh', width: '100%', position: 'relative', backgroundImage: "linear-gradient(180deg, rgba(8, 8, 10, 0.75) 0%, rgba(10, 10, 14, 0.90) 60%, rgba(10, 10, 14, 0.98) 100%), url('/katana-bg.jpg')",
+    backgroundSize: 'cover', backgroundPosition: 'center right', backgroundRepeat: 'no-repeat', backgroundColor: '#0a0a0c',
+    color: '#fff', boxSizing: 'border-box', overflowX: 'hidden'
+  },
+  bgOverlay: { position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(8, 8, 10, 0.75) 0%, rgba(10, 10, 14, 0.90) 60%, rgba(10, 10, 14, 0.98) 100%)', zIndex: 1 },
+  header: { position: 'relative', zIndex: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '0 auto 1.6rem', padding: '2.5rem 1.25rem 0', maxWidth: '440px' },
+  dateLabel: { fontSize: '0.72rem', fontWeight: '700', letterSpacing: '1px', color: '#ff85a2', textTransform: 'uppercase' },
+  title: { fontSize: '2rem', fontWeight: '800', margin: '0.15rem 0 0', letterSpacing: '-0.5px' },
+  streakPill: { display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'rgba(20, 20, 24, 0.85)', border: '1.5px solid rgba(255, 133, 162, 0.45)', boxShadow: '0 4px 16px rgba(255, 133, 162, 0.25)', borderRadius: '40px', padding: '0.45rem 0.95rem', cursor: 'pointer' },
+  fireIcon: { fontSize: '1rem' },
+  streakNum: { fontSize: '1.05rem', fontWeight: '800', color: '#fff' },
+  card: { position: 'relative', zIndex: 2, backgroundColor: 'rgba(18, 18, 22, 0.75)', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '22px', padding: '1.1rem', marginBottom: '1.2rem', backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)' },
+  sectionHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.7rem', fontWeight: '700', letterSpacing: '0.8px' },
+  cardTitle: { fontSize: '0.7rem', fontWeight: '700', letterSpacing: '0.8px', color: '#aaa' },
+  highlightBadge: { fontSize: '0.7rem', fontWeight: '700', color: '#ff85a2', whiteSpace: 'nowrap' },
+  weekRow: { display: 'flex', justifyContent: 'space-between', gap: '0.35rem' },
+  dayBox: { flex: 1, minWidth: 0, textAlign: 'center' },
+  heroCard: { backgroundColor: 'rgba(22, 22, 28, 0.85)', border: '1px solid rgba(255, 133, 162, 0.35)', borderRadius: '24px', padding: '1.35rem', marginBottom: '1.2rem', boxShadow: '0 8px 30px rgba(0, 0, 0, 0.55)' },
+  heroTop: { display: 'flex', justifyContent: 'space-between', gap: '0.75rem', marginBottom: '0.5rem' },
+  todayTag: { fontSize: '0.7rem', fontWeight: '800', letterSpacing: '1px', color: '#ff85a2' },
+  timeTag: { fontSize: '0.75rem', color: '#aaa' },
+  heroTitle: { fontSize: '1.35rem', fontWeight: '800', margin: '0.2rem 0 0.4rem' },
+  heroDesc: { fontSize: '0.8rem', color: '#999', margin: '0 0 1.2rem', lineHeight: '1.25rem' },
+  unleashBtn: { width: '100%', backgroundColor: '#ff85a2', color: '#0e0e12', boxShadow: '0 4px 18px rgba(255, 133, 162, 0.35)' },
+  grid: { position: 'relative', zIndex: 2, display: 'flex', gap: '0.85rem' },
+  statCard: { flex: 1, backgroundColor: 'rgba(18, 18, 22, 0.75)', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '20px', padding: '1.1rem', backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', cursor: 'pointer' },
+  statVal: { fontSize: '1.35rem', fontWeight: '800', margin: '0.45rem 0 0.2rem' },
+  statLabel: { fontSize: '0.72rem', color: '#888', fontWeight: '600' },
+  statSub: { fontSize: '0.75rem', color: '#888' },
+  statAction: { fontSize: '0.75rem', color: '#ff85a2', fontWeight: '600' },
+  unit: { fontSize: '0.85rem', color: '#aaa', fontWeight: '500' }
 }
