@@ -15,13 +15,14 @@ export default function Auth({ onLoginSuccess }) {
 
     try {
       if (isSignUp) {
-        const { error } = await supabase.auth.signUp({ email, password })
+        const { data, error } = await supabase.auth.signUp({ email, password })
         if (error) throw error
-        alert('Check your email for the confirmation link, or log in if auto-confirm is enabled.')
+        if (data.user && data.session && onLoginSuccess) onLoginSuccess(data.user)
+        else setErrorMsg('Check your email for a confirmation link before logging in.')
       } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password })
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password })
         if (error) throw error
-        if (onLoginSuccess) onLoginSuccess()
+        if (onLoginSuccess) onLoginSuccess(data.user)
       }
     } catch (err) {
       setErrorMsg(err.message)

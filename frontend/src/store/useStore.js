@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import { api } from '../lib/api.js'
+import { supabase } from '../lib/supabase.js'
+import { fetchUserState, saveUserState } from '../lib/supabase-state.js'
 import { localTZ } from '../lib/format.js'
 import { registerCustom } from '../lib/exercises.js'
 import { DEMO, DEMO_SEEDED } from '../lib/demo.js'
@@ -104,12 +105,12 @@ export const useStore = create((set, get) => {
     async pushState() {
       if (!get().user) return
       clearTimeout(pushTm)
-      try { await api('/api/data', { method: 'PUT', body: JSON.stringify({ state: get().S }) }); localStorage.removeItem('gym_dirty') }
+      try { await saveUserState(get().S); localStorage.removeItem('gym_dirty') }
       catch (e) { localStorage.setItem('gym_dirty', '1') }
     },
     async pullState() {
       try {
-        const { state } = await api('/api/data')
+        const state = await fetchUserState()
         const S = get().S
         const dirty = localStorage.getItem('gym_dirty') === '1'
         if (state && (!hasData(S) || ((state._ts || 0) >= (S._ts || 0) && !dirty))) {
@@ -122,7 +123,7 @@ export const useStore = create((set, get) => {
     },
 
     async signOut() {
-      try { await get().pushState(); await api('/api/logout', { method: 'POST', body: '{}' }) } catch (e) { /* */ }
+      try { await get().pushState(); await supabase.auth.signOut() } catch (e) { /* */ }
       clearLocalSession()
     },
 
@@ -133,7 +134,7 @@ export const useStore = create((set, get) => {
     // would sign the user out of the one place the bump didn't reach. Caller reports the error.
     async signOutAll() {
       await get().pushState()   // never throws — stores gym_dirty and moves on when offline
-      await api('/api/logout/all', { method: 'POST', body: '{}' })
+      await supabase.auth.signOut({ scope: 'global' })
       clearLocalSession()
     },
 
@@ -145,7 +146,7 @@ export const useStore = create((set, get) => {
       persist(Object.assign(clone(DEF), buildDemoState()), false)
     },
 
-    // Boot: ask the server who we are, then pull.
+    // Boot: restore the Supabase session, then pull the account state.
     async boot() {
       // Mobile build: no backend either — restore from the file mirror (the durable copy;
       // localStorage may have been evicted since the last run) and go straight in.
@@ -173,9 +174,11 @@ export const useStore = create((set, get) => {
         return
       }
       try {
-        const me = await api('/api/me')
-        get().setUser(me.user)
-        await get().pullState()
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session?.user) {
+          get().setUser(session.user)
+          await get().pullState()
+        } else get().setUser(null)
         // Re-stamp the reminder's timezone on every load — keeps it correct if you're travelling,
         // without needing to revisit Settings.
         const tz = localTZ()
@@ -183,7 +186,7 @@ export const useStore = create((set, get) => {
           get().update(s => { s.reminder = { ...s.reminder, tz } })
         }
       } catch (e) {
-        if (e.status === 401) get().setUser(null)
+        get().setUser(null)
       }
       set({ ready: true })
     }
