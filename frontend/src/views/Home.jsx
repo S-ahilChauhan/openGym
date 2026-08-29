@@ -2,16 +2,16 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore, DEF } from '../store/useStore.js'
-import { effectiveRoutine, effectiveRoutineId, streakWeeks, lastBW } from '../lib/history.js'
+import { effectiveRoutine, effectiveRoutineId, lastBW } from '../lib/history.js'
 import { fmtNum, fmtDate, todayISO, isoOf, weekKey, DAYS } from '../lib/format.js'
 import { t as defaultT, dateLocale } from '../lib/i18n.js'
-import { getStreakRank } from '../utils/ranks.js'
+import { getStreakRank, calculateStreakDays } from '../utils/ranks.js'
 import { bwSheet, goalSheet, dayOverrideSheet, calendarSheet, startFlow, loadStarterPlan, bwDeltaColor } from '../sheets.jsx'
 import LineChart from '../components/LineChart.jsx'
 import Icon from '../components/Icon.jsx'
 import { Button } from '../components/ui.jsx'
 
-export default function Home({ onNavigate, state, dispatch, t: propT, rankWeeks = null } = {}) {
+export default function Home({ onNavigate, state, dispatch, t: propT, rankDays = null } = {}) {
   const routerNavigate = useNavigate()
   const nav = typeof onNavigate === 'function' ? path => onNavigate(path.replace(/^\//, '')) : routerNavigate
   const storedState = useStore(s => s.S)
@@ -41,7 +41,12 @@ export default function Home({ onNavigate, state, dispatch, t: propT, rankWeeks 
 
   const today = new Date()
   const routine = effectiveRoutine(S, todayISO())
-  const rank = getStreakRank(rankWeeks ?? streakWeeks(S))
+  
+  // Calculate day-based streak and rank progression
+  const streakDaysCount = rankDays ?? calculateStreakDays(S.workouts)
+  const rank = getStreakRank(streakDaysCount)
+  const isZeroStreak = streakDaysCount === 0
+
   const bw = lastBW(S)
   const prevBW = S.bodyweight.length > 1 ? S.bodyweight[S.bodyweight.length - 2] : null
   const delta = bw && prevBW ? bw.w - prevBW.w : null
@@ -98,21 +103,106 @@ export default function Home({ onNavigate, state, dispatch, t: propT, rankWeeks 
           </div>
         </div>
 
+        {/* Header Compact Streak Pill */}
         <button
           className="iconbtn"
           style={{
             ...hudStyles.streakPill,
-            borderColor: rank.badgeColor,
-            boxShadow: `0 0 12px ${rank.glowColor}`,
+            borderColor: isZeroStreak ? 'rgba(255,255,255,0.15)' : rank.badgeColor,
+            boxShadow: isZeroStreak ? 'none' : `0 0 14px ${rank.glowColor}`,
             marginLeft: 'auto'
           }}
           onClick={() => calendarSheet()}
           aria-label={t('View streak')}
         >
-          <span style={{ ...hudStyles.fireIcon, fontSize: '0.95rem' }}>🔥</span>
-          <span style={hudStyles.streakNum}>{rankWeeks ?? streakWeeks(S)}</span>
-          <span style={hudStyles.streakLabel}>{t('weeks')}</span>
+          <span style={{ fontSize: '0.95rem', filter: isZeroStreak ? 'grayscale(1) opacity(0.5)' : 'none' }}>🔥</span>
+          <span style={hudStyles.streakNum}>{streakDaysCount}</span>
+          <span style={{ fontSize: '0.68rem', color: '#aaa', fontWeight: '700' }}>d</span>
         </button>
+      </div>
+
+      {/* Hero Streak Card */}
+      <div style={hudStyles.streakHeroCard} onClick={() => calendarSheet()}>
+        <div
+          style={{
+            ...hudStyles.ambientGlow,
+            background: isZeroStreak ? 'rgba(255, 255, 255, 0.04)' : rank.glowColor
+          }}
+        />
+
+        <div style={hudStyles.streakHeroContent}>
+          {/* Circular Progress & Flame Disc */}
+          <div style={hudStyles.ringWrapper}>
+            <svg viewBox="0 0 44 44" style={hudStyles.svgRing}>
+              {/* Inner subtle disc */}
+              <circle
+                cx="22"
+                cy="22"
+                r="17"
+                fill="rgba(255, 255, 255, 0.03)"
+              />
+              {/* Background Track */}
+              <circle
+                cx="22"
+                cy="22"
+                r="17"
+                fill="none"
+                stroke="rgba(255, 255, 255, 0.09)"
+                strokeWidth="2.8"
+              />
+              {/* Dynamic Progress Indicator */}
+              <circle
+                cx="22"
+                cy="22"
+                r="17"
+                fill="none"
+                stroke={isZeroStreak ? 'rgba(255, 255, 255, 0.18)' : rank.badgeColor}
+                strokeWidth="2.8"
+                strokeDasharray="106.8"
+                strokeDashoffset={isZeroStreak ? '106.8' : Math.max(10, 106.8 - (streakDaysCount * 2.5))}
+                strokeLinecap="round"
+                style={{
+                  filter: isZeroStreak ? 'none' : `drop-shadow(0 0 5px ${rank.badgeColor})`,
+                  transition: 'stroke-dashoffset 0.8s cubic-bezier(0.4, 0, 0.2, 1)'
+                }}
+                transform="rotate(-90 22 22)"
+              />
+            </svg>
+            <div style={hudStyles.ringCenter}>
+              <span style={{ fontSize: '1.15rem', filter: isZeroStreak ? 'grayscale(1) opacity(0.35)' : 'none' }}>
+                🔥
+              </span>
+            </div>
+          </div>
+
+          {/* Text Details & Level Up Countdown */}
+          <div style={hudStyles.streakTextCol}>
+            <div style={hudStyles.rankEyebrow}>
+              <span style={{ color: isZeroStreak ? '#888' : rank.badgeColor, fontWeight: '800' }}>
+                {isZeroStreak ? 'IGNITE STREAK' : rank.fullTitle.toUpperCase()}
+              </span>
+            </div>
+
+            <div style={hudStyles.streakNumberRow}>
+              <span style={hudStyles.streakNumHero}>{streakDaysCount}</span>
+              <span style={hudStyles.unitTextHero}>{streakDaysCount === 1 ? 'DAY' : 'DAYS'}</span>
+            </div>
+
+            <div style={hudStyles.subtextHero}>
+              {rank.nextRankTitle ? (
+                <span style={{ color: rank.badgeColor, fontWeight: '700' }}>
+                  ⚡ {rank.daysToNext} {rank.daysToNext === 1 ? 'day' : 'days'} to level up ({rank.nextRankTitle})
+                </span>
+              ) : (
+                <span style={{ color: rank.badgeColor, fontWeight: '700' }}>
+                  👑 Apex Master ({rank.title})
+                </span>
+              )}
+            </div>
+          </div>
+
+          <Icon name="chevronRight" style={{ marginLeft: 'auto', color: '#666', fontSize: 18 }} />
+        </div>
       </div>
 
       {/* Weekly Discipline Card */}
@@ -220,22 +310,6 @@ export default function Home({ onNavigate, state, dispatch, t: propT, rankWeeks 
           <div className="muted small">{t("No entries yet — log your weight to start the curve. It's also asked before every workout.")}</div>
         )}
       </div>
-
-      {/* Streak Summary */}
-      <div className="card tappable" style={{ ...hudStyles.card, cursor: 'pointer' }} onClick={() => calendarSheet()}>
-        <div className="row space-between">
-          <div>
-            <div className="row" style={{ gap: 7, fontSize: 20, fontWeight: 700, letterSpacing: '-.021em' }}>
-              <Icon name="flame" style={{ color: 'var(--orange)' }} />
-              {t('{0} week streak', streakWeeks(S))}
-            </div>
-            <div className="muted small" style={{ marginTop: 2 }}>
-              {wThisWeek}{plannedPerWeek ? ' / ' + plannedPerWeek : ''} {t('this week')} · {t(S.workouts.length === 1 ? '{0} workout total' : '{0} workouts total', S.workouts.length)}
-            </div>
-          </div>
-          <Icon name="calendar" className="chev" style={{ fontSize: 20 }} />
-        </div>
-      </div>
     </div>
   )
 }
@@ -267,17 +341,85 @@ const hudStyles = {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    margin: '0 0 1.6rem',
-    padding: '2rem 1rem 0.5rem',
+    margin: '0 0 1.2rem',
+    padding: '1.8rem 1rem 0.4rem',
     boxSizing: 'border-box'
   },
   dateLabel: { fontSize: '0.72rem', fontWeight: '700', letterSpacing: '1px', textTransform: 'uppercase' },
   title: { fontSize: '1.8rem', fontWeight: '800', margin: '0.15rem 0 0.4rem', letterSpacing: '-0.5px', textShadow: '0 2px 10px rgba(0, 0, 0, 0.85)' },
   rankBadge: { display: 'inline-flex', alignItems: 'center', gap: '5px', border: '1px solid', borderRadius: '16px', padding: '0.2rem 0.65rem', fontSize: '0.72rem', fontWeight: '700', backgroundColor: 'rgba(0,0,0,0.6)' },
-  streakPill: { display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'rgba(20, 20, 24, 0.85)', border: '1.5px solid', borderRadius: '40px', padding: '0.45rem 0.95rem', cursor: 'pointer' },
-  fireIcon: { fontSize: '1rem' },
-  streakNum: { fontSize: '1.05rem', fontWeight: '800', color: '#fff' },
-  streakLabel: { fontSize: '0.75rem', color: '#aaa', fontWeight: '600' },
+  streakPill: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    backgroundColor: 'rgba(18, 18, 24, 0.85)',
+    border: '1px solid',
+    borderRadius: '40px',
+    padding: '0.35rem 0.75rem',
+    cursor: 'pointer',
+    backdropFilter: 'blur(12px)',
+    WebkitBackdropFilter: 'blur(12px)'
+  },
+  streakNum: { fontSize: '0.95rem', fontWeight: '900', color: '#fff' },
+
+  // Hero Streak Card Styles
+  streakHeroCard: {
+    position: 'relative',
+    zIndex: 2,
+    ...frostedCardStyle,
+    borderRadius: '22px',
+    padding: '1rem 1.25rem',
+    marginBottom: '1.2rem',
+    cursor: 'pointer',
+    overflow: 'hidden'
+  },
+  ambientGlow: {
+    position: 'absolute',
+    top: '-30%',
+    left: '10%',
+    width: '110px',
+    height: '110px',
+    borderRadius: '50%',
+    filter: 'blur(40px)',
+    pointerEvents: 'none',
+    opacity: 0.45
+  },
+  streakHeroContent: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '1.15rem'
+  },
+  ringWrapper: {
+    position: 'relative',
+    width: '48px',
+    height: '48px',
+    flexShrink: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  svgRing: { width: '100%', height: '100%' },
+  ringCenter: {
+    position: 'absolute',
+    inset: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  streakTextCol: { display: 'flex', flexDirection: 'column' },
+  rankEyebrow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    fontSize: '0.66rem',
+    letterSpacing: '1px',
+    marginBottom: '1px'
+  },
+  streakNumberRow: { display: 'flex', alignItems: 'baseline', gap: '6px', lineHeight: 1.1 },
+  streakNumHero: { fontSize: '1.65rem', fontWeight: '900', color: '#fff', letterSpacing: '-0.5px' },
+  unitTextHero: { fontSize: '0.78rem', fontWeight: '800', color: 'rgba(255, 255, 255, 0.5)', letterSpacing: '0.5px' },
+  subtextHero: { fontSize: '0.72rem', color: 'rgba(255, 255, 255, 0.45)', marginTop: '2px', fontWeight: '500' },
+
   card: { position: 'relative', zIndex: 2, ...frostedCardStyle, borderRadius: '22px', padding: '1.1rem', marginBottom: '1.2rem' },
   sectionHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.7rem', fontWeight: '700', letterSpacing: '0.8px' },
   cardTitle: { fontSize: '0.7rem', fontWeight: '700', letterSpacing: '0.8px', color: '#aaa' },
@@ -296,5 +438,5 @@ const hudStyles = {
   statVal: { fontSize: '1.35rem', fontWeight: '800', margin: '0.45rem 0 0.2rem' },
   statLabel: { fontSize: '0.72rem', color: '#888', fontWeight: '600' },
   statAction: { fontSize: '0.75rem', fontWeight: '600', marginTop: '0.4rem' },
-  unit: { fontSize: '0.85rem', color: '#aaa', fontWeight: '500' },
+  unit: { fontSize: '0.85rem', color: '#aaa', fontWeight: '500' }
 }
