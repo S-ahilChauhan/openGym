@@ -44,10 +44,6 @@ export default function TabBar({ onStart }) {
         <Icon name="chart" /><span>{t('Stats')}</span>
       </button>
 
-      <button className={on('library') ? 'on' : ''} onClick={() => nav('/library')}>
-        <Icon name="list" /><span>{t('Exercises')}</span>
-      </button>
-
       {/* Direct, crash-proof Profile Tab Button */}
       <button className={on('profile') ? 'on' : ''} onClick={() => nav('/profile')}>
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
