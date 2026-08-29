@@ -619,15 +619,17 @@ export default function Plan({ rankWeeks = null } = {}) {
                 </div>
               ))}
             </div>
-          ) : (
-            <>
-              <div className="empty">
-                <div className="ico"><Icon name="clipboard" /></div>
-                {t('No routines yet.')}<br />{t('Choose a preset split above or start the wizard.')}
-              </div>
-              <Button icon="sparkles" onClick={loadStarterPlan}>{t('Load starter plan (Push / Pull / Legs)')}</Button>
-            </>
-          )}
+         ) : (
+  <div className="empty">
+    <div className="ico"><Icon name="clipboard" /></div>
+    <div style={{ fontWeight: '700', fontSize: '0.9rem', color: '#fff', marginBottom: '4px' }}>
+      {t('No routines yet')}
+    </div>
+    <div style={{ color: '#888', fontSize: '0.78rem' }}>
+      {t('Choose a preset split above or start the wizard.')}
+    </div>
+  </div>
+)}
         </div>
       </div>
 
