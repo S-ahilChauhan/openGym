@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useStore } from '../store/useStore.js'
+import { useStore, DEF } from '../store/useStore.js'
 import { EXIDX } from '../lib/exercises.js'
-import { lastBW, streakWeeks, setLabel, modeOf, effortOf } from '../lib/history.js'
+import { lastBW, streakWeeks, setLabel, modeOf, effortOf, workoutVolume } from '../lib/history.js'
 import { fmtNum, fmtDate, fmtVol, todayISO, weekKey } from '../lib/format.js'
 import { t } from '../lib/i18n.js'
 import { bwSheet, goalSheet, calendarSheet, workoutDetailSheet, WorkoutRow, bwDeltaColor } from '../sheets.jsx'
@@ -17,6 +17,7 @@ import {
   effortHistogram, isHardSet, HARD_RIR
 } from '../lib/effort.js'
 import { Button, Segmented, SelectRow } from '../components/ui.jsx'
+import { getStreakRank } from '../utils/ranks.js'
 
 // Which muscles the training in a window actually hit — and, the point of the card,
 // which ones it keeps missing. Shading is relative within the window (lib/muscles.js).
@@ -130,14 +131,31 @@ function EffortCard({ S }) {
 }
 
 // Stats = the analytics hub: all charts, progress and history live here.
-export default function Stats() {
+export default function Stats({ state, rankWeeks = null } = {}) {
   const nav = useNavigate()
-  const S = useStore(s => s.S)
+  const storedState = useStore(s => s.S)
+  const source = state || storedState || {}
+  const S = {
+    ...DEF,
+    ...source,
+    bodyweight: Array.isArray(source.bodyweight) ? source.bodyweight : [],
+    routines: Array.isArray(source.routines) ? source.routines : [],
+    workouts: Array.isArray(source.workouts)
+      ? source.workouts.filter(w => w && typeof w.d === 'string').map(w => ({
+        ...w,
+        entries: Array.isArray(w.entries) ? w.entries.map(e => ({ ...e, sets: Array.isArray(e.sets) ? e.sets : [] })) : []
+      }))
+      : [],
+    week: source.week && typeof source.week === 'object' ? source.week : {},
+    dayPlan: source.dayPlan && typeof source.dayPlan === 'object' ? source.dayPlan : {}
+  }
   const [range, setRange] = useState(90)
   const [exId, setExId] = useState(null)
   const [exMetric, setExMetric] = useState('top')
   const now = Date.now()
   const anyEffort = hasEffort(S)
+  const rank = getStreakRank(rankWeeks ?? streakWeeks(S))
+  const history = S.workouts
   const kind = displayScale(S)
   const hd = scaleName(kind)
 
@@ -146,6 +164,7 @@ export default function Stats() {
   const bw30 = S.bodyweight.filter(b => (b.t || new Date(b.d).getTime()) > now - 30 * 86400000)
   const bwDelta30 = bw30.length > 1 ? bw30[bw30.length - 1].w - bw30[0].w : null
   const monthW = S.workouts.filter(w => w.d.slice(0, 7) === todayISO().slice(0, 7)).length
+  const totalVolume = S.workouts.reduce((sum, workout) => sum + (workout.vol ?? workoutVolume(workout)), 0)
 
   const exHist = [...new Set(S.workouts.flatMap(w => w.entries.map(e => e.id)))].filter(id => EXIDX[id]).sort((a, b) => EXIDX[a].n < EXIDX[b].n ? -1 : 1)
   const curEx = exId && exHist.includes(exId) ? exId : exHist[0] || null
@@ -195,14 +214,32 @@ export default function Stats() {
   if (showEff) exOpts.push({ value: 'effort', label: t('Effort') })
 
   return <>
-    <div className="hdr"><div><h1>{t('Stats')}</h1><div className="sub">{t('Progress & history')}</div></div>
+    <div className="hdr" style={statsStyles.header}><div><div style={{ ...statsStyles.eyebrow, color: rank.badgeColor }}>{t('Warrior analytics')}</div><h1>{t('Battle stats')}</h1><div className="sub">{t('Progress & history')}</div></div>
+      <div style={{ ...statsStyles.rankPill, color: rank.badgeColor, borderColor: rank.badgeColor, boxShadow: `0 0 12px ${rank.glowColor}` }}>LVL {rank.level} · {rank.kanji}</div>
       <button className="iconbtn" onClick={() => nav('/history')} aria-label={t('History')}><Icon name="history" /></button></div>
 
     <div className="tiles">
-      <div className="tile"><div className="l"><Icon name="dumbbell" />{t('Workouts')}</div><div className="v">{S.workouts.length}</div></div>
-      <div className="tile"><div className="l"><Icon name="calendar" />{t('This month')}</div><div className="v">{monthW}</div></div>
-      <div className="tile"><div className="l"><Icon name="flame" />{t('Week streak')}</div><div className="v">{streakWeeks(S)}</div></div>
-      <div className="tile"><div className="l"><Icon name="scale" />{t('Weight 30d')}</div><div className="v" style={{ fontSize: 22, color: bwDelta30 === null ? 'inherit' : bwDeltaColor(bwDelta30, (lastBW(S) || {}).w || 0) }}>{bwDelta30 === null ? '—' : (bwDelta30 > 0 ? '+' : '') + fmtNum(bwDelta30) + ' ' + S.unit}</div></div>
+      <div className="tile" style={statsStyles.glassCard}><div className="l"><Icon name="dumbbell" />{t('Workouts completed')}</div><div className="v">{S.workouts.length}</div><div className="small" style={{ color: rank.badgeColor }}>{rank.nextTarget}</div></div>
+      <div className="tile" style={statsStyles.glassCard}><div className="l"><Icon name="chart" />{t('Total volume lifted')}</div><div className="v">{fmtVol(totalVolume, S.unit)}</div><div className="small" style={{ color: rank.badgeColor }}>{t('All recorded sessions')}</div></div>
+      <div className="tile" style={statsStyles.glassCard}><div className="l"><Icon name="calendar" />{t('This month')}</div><div className="v">{monthW}</div></div>
+      <div className="tile" style={statsStyles.glassCard}><div className="l"><Icon name="scale" />{t('Weight 30d')}</div><div className="v" style={{ fontSize: 22, color: bwDelta30 === null ? 'inherit' : bwDeltaColor(bwDelta30, (lastBW(S) || {}).w || 0) }}>{bwDelta30 === null ? '—' : (bwDelta30 > 0 ? '+' : '') + fmtNum(bwDelta30) + ' ' + S.unit}</div></div>
+    </div>
+
+    <div className="card" style={statsStyles.glassCard}>
+      <h3 style={statsStyles.cardHeaderTitle}>{t('Recent battles')}</h3>
+      {history.length === 0 ? <p className="muted small" style={{ marginTop: 8 }}>{t('No workouts logged yet. Complete a session to see detailed metrics!')}</p> : (
+        <div style={statsStyles.recentList}>
+          {history.slice(-5).reverse().map((workout, index) => (
+            <div key={workout.id || index} style={statsStyles.recentRow} onClick={() => workoutDetailSheet(workout)}>
+              <div>
+                <div style={statsStyles.recentName}>{workout.name || t('Workout session')}</div>
+                <div style={statsStyles.recentDate}>{fmtDate(workout.d, true)}</div>
+              </div>
+              <div style={{ ...statsStyles.recentCount, color: rank.badgeColor }}>{workout.entries.length} {t('Exercises')}</div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
 
     <div className="card">
@@ -264,4 +301,17 @@ export default function Stats() {
       <div className="list">{[...S.workouts].reverse().slice(0, 6).map(w => <WorkoutRow key={w.id} w={w} onClick={() => workoutDetailSheet(w)} />)}</div>
     </>}
   </>
+}
+
+const statsStyles = {
+  header: { borderBottom: '1px solid rgba(255, 255, 255, 0.1)', paddingBottom: 12 },
+  eyebrow: { fontSize: '0.7rem', fontWeight: '700', letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 3 },
+  rankPill: { border: '1px solid', borderRadius: '20px', padding: '0.35rem 0.75rem', fontSize: '0.72rem', fontWeight: '800', backgroundColor: 'rgba(20, 20, 25, 0.8)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)' },
+  glassCard: { backgroundColor: 'rgba(18, 18, 22, 0.75)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '20px', boxShadow: '0 8px 30px rgba(0, 0, 0, 0.35)' },
+  cardHeaderTitle: { fontSize: '1.05rem', fontWeight: '700', margin: 0 },
+  recentList: { display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 },
+  recentRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.6rem', backgroundColor: 'rgba(255, 255, 255, 0.05)', borderRadius: 12, cursor: 'pointer' },
+  recentName: { fontWeight: '700', fontSize: '0.9rem' },
+  recentDate: { fontSize: '0.75rem', color: '#888' },
+  recentCount: { fontWeight: '800', fontSize: '0.9rem' }
 }

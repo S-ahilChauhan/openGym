@@ -120,6 +120,7 @@ body{
   touch-action:manipulation;
   font-variant-numeric:tabular-nums;
 }
+#root,body,main,.view,.page-container,#app{background-color:transparent!important}
 button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;letter-spacing:inherit}
 input,select,textarea{font:inherit;color:var(--label);letter-spacing:inherit}
 img{max-width:100%}

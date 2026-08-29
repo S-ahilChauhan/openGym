@@ -4,13 +4,16 @@ import { EXDB, BODYPARTS, allExercises, equipmentOf } from '../lib/exercises.js'
 import { bestWeightFor } from '../lib/history.js'
 import { fmtNum } from '../lib/format.js'
 import { t } from '../lib/i18n.js'
+import { streakWeeks } from '../lib/history.js'
+import { getStreakRank } from '../utils/ranks.js'
 import { Thumb } from '../components/Media.jsx'
 import { exerciseDetailSheet, addToRoutineSheet, customExSheet } from '../sheets.jsx'
 import Icon from '../components/Icon.jsx'
 import { Button } from '../components/ui.jsx'
 
-export default function Library() {
+export default function Library({ rankWeeks = null } = {}) {
   const S = useStore(s => s.S)
+  const rank = getStreakRank(rankWeeks ?? streakWeeks(S))
   const [q, setQ] = useState('')
   const [bp, setBp] = useState('')
   const [eq, setEq] = useState('')
@@ -23,8 +26,8 @@ export default function Library() {
   const f = eqOn ? base.filter(e => e.eq === eqOn) : base
 
   return <>
-    <div className="hdr"><div><h1>{t('Exercises')}</h1><div className="sub">{t('{0} exercises with animations', EXDB.length)}</div></div></div>
-    <div className="search" style={{ marginBottom: 10 }}><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></svg>
+    <div className="hdr" style={libraryStyles.header}><div><div style={{ ...libraryStyles.eyebrow, color: rank.badgeColor }}>{t('Technique vault')}</div><h1>{t('Exercises')}</h1><div className="sub">{t('{0} exercises with animations', EXDB.length)} · {rank.fullTitle}</div></div></div>
+    <div className="search" style={{ ...libraryStyles.search, borderColor: q ? rank.badgeColor : undefined, boxShadow: q ? `0 0 12px ${rank.glowColor}` : undefined }}><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></svg>
       <input className="input" placeholder={t('Search…')} value={q} onChange={e => { setQ(e.target.value); setShown(40) }} /></div>
     <div className="chips" style={{ marginBottom: eqOpts.length > 1 ? 8 : 12 }}>
       <button className={'chip nocap' + (!bp ? ' on' : '')} onClick={() => { setBp(''); setEq(''); setShown(40) }}>{t('All')}</button>
@@ -34,17 +37,17 @@ export default function Library() {
       <button className={'chip nocap' + (!eqOn ? ' on' : '')} onClick={() => { setEq(''); setShown(40) }}>{t('Any equipment')}</button>
       {eqOpts.map(x => <button key={x} className={'chip' + (eqOn === x ? ' on' : '')} onClick={() => { setEq(x); setShown(40) }}>{t(x)}</button>)}
     </div>}
-    <div className="list">
-      <div className="item" onClick={() => customExSheet(null, ex => exerciseDetailSheet(ex), q.trim())}>
+    <div className="list" style={libraryStyles.list}>
+      <div className="item" style={libraryStyles.card} onClick={() => customExSheet(null, ex => exerciseDetailSheet(ex), q.trim())}>
         <div className="thumb thumb-x"><Icon name="sparkles" /></div>
         <div className="grow"><div className="tt">{t('Create your own exercise')}</div><div className="ss">{t('name + body part, no animation')}</div></div><Icon name="plus" className="chev" />
       </div>
       {f.slice(0, shown).map(e => {
         const best = bestWeightFor(S, e.id)
-        return <div key={e.id} className="item" onClick={() => exerciseDetailSheet(e)}>
+        return <div key={e.id} className="item" style={libraryStyles.card} onClick={() => exerciseDetailSheet(e)}>
           <Thumb ex={e} />
           <div className="grow"><div className="tt capitalize">{e.n}</div><div className="ss capitalize">{t(e.tg || e.bp)} · {t(e.eq)}</div></div>
-          {best > 0 && <span className="tag acc">{fmtNum(best)}</span>}
+          {best > 0 && <span style={{ ...libraryStyles.record, color: rank.badgeColor }}><span style={libraryStyles.recordLabel}>{t('PR')}</span>{fmtNum(best)}</span>}
           <Button size="sm" variant="tinted" icon="plus" onClick={ev => { ev.stopPropagation(); addToRoutineSheet(e) }}>{t('Plan')}</Button>
         </div>
       })}
@@ -52,4 +55,14 @@ export default function Library() {
     </div>
     {f.length > shown && <><div style={{ height: 10 }} /><Button onClick={() => setShown(s => s + 40)}>{t('Show more')}</Button></>}
   </>
+}
+
+const libraryStyles = {
+  header: { borderBottom: '1px solid rgba(255, 255, 255, 0.1)', paddingBottom: 12 },
+  eyebrow: { fontSize: 12, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 3 },
+  search: { marginBottom: 10, transition: 'border-color 180ms ease, box-shadow 180ms ease' },
+  list: { display: 'flex', flexDirection: 'column', gap: 10 },
+  card: { background: 'rgba(18, 18, 22, 0.75)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: 20, boxShadow: '0 8px 30px rgba(0, 0, 0, 0.4)' },
+  record: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', fontWeight: 800 },
+  recordLabel: { color: 'var(--label-3)', fontSize: 10, fontWeight: 600, letterSpacing: '.06em' }
 }
