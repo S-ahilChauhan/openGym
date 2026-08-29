@@ -24,6 +24,7 @@ import History from './views/History.jsx'
 import Library from './views/Library.jsx'
 import Settings from './views/Settings.jsx'
 import Admin from './views/Admin.jsx'
+import { ALL_RANK_IMAGES } from './utils/ranks.js'
 
 bindUI(useUI)   // lets the shared controls open sheets without importing the store at module scope
 
@@ -91,6 +92,12 @@ function Shell() {
 
 export default function App() {
   const boot = useStore(s => s.boot)
-  useEffect(() => { boot() }, [boot])
+  useEffect(() => {
+    ALL_RANK_IMAGES.forEach(src => {
+      const img = new Image()
+      img.src = src
+    })
+    boot()
+  }, [boot])
   return <HashRouter><Shell /></HashRouter>
 }

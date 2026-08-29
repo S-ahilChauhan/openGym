@@ -4,16 +4,11 @@ import { useStore, DEF } from '../store/useStore.js'
 import { effectiveRoutine, effectiveRoutineId, streakWeeks, lastBW, setsDoneActive } from '../lib/history.js'
 import { fmtNum, fmtDate, todayISO, isoOf, weekKey, DAYS } from '../lib/format.js'
 import { t as defaultT, dateLocale } from '../lib/i18n.js'
-import { getStreakRank } from '../lib/ranks.js'
+import { ALL_RANK_IMAGES, getStreakRank } from '../utils/ranks.js'
 import { bwSheet, goalSheet, dayOverrideSheet, calendarSheet, startFlow, loadStarterPlan, bwDeltaColor } from '../sheets.jsx'
 import LineChart from '../components/LineChart.jsx'
 import Icon from '../components/Icon.jsx'
 import { Button } from '../components/ui.jsx'
-
-const ALL_RANK_IMAGES = [
-  '/bg-lvl1-novice.jpg', '/bg-lvl2-ronin.jpg', '/katana-bg.jpg?v=2',
-  '/bg-lvl4-demon.jpg', '/bg-lvl5-shogun.jpg', '/bg-lvl6-ogre.jpg'
-]
 
 export default function Home({ onNavigate, state, dispatch, t: propT } = {}) {
   const routerNavigate = useNavigate()
@@ -177,6 +172,15 @@ export default function Home({ onNavigate, state, dispatch, t: propT } = {}) {
   </div>
 }
 
+const frostedCardStyle = {
+  backgroundColor: 'rgba(18, 18, 22, 0.75)',
+  backdropFilter: 'blur(16px)',
+  WebkitBackdropFilter: 'blur(16px)',
+  border: '1px solid rgba(255, 255, 255, 0.1)',
+  borderRadius: '20px',
+  boxShadow: '0 8px 30px rgba(0, 0, 0, 0.4)'
+}
+
 const hudStyles = {
   container: {
     minHeight: '100vh', width: '100%', position: 'relative', backgroundImage: "linear-gradient(180deg, rgba(8, 8, 10, 0.25) 0%, rgba(10, 10, 14, 0.45) 50%, rgba(10, 10, 14, 0.75) 100%), url('/katana-bg.jpg?v=2')",
@@ -191,7 +195,7 @@ const hudStyles = {
   streakPill: { display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'rgba(20, 20, 24, 0.85)', border: '1.5px solid rgba(255, 133, 162, 0.45)', boxShadow: '0 4px 16px rgba(255, 133, 162, 0.25)', borderRadius: '40px', padding: '0.45rem 0.95rem', cursor: 'pointer' },
   fireIcon: { fontSize: '1rem' },
   streakNum: { fontSize: '1.05rem', fontWeight: '800', color: '#fff' },
-  card: { position: 'relative', zIndex: 2, backgroundColor: 'rgba(18, 18, 22, 0.75)', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '22px', padding: '1.1rem', marginBottom: '1.2rem', backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)' },
+  card: { position: 'relative', zIndex: 2, ...frostedCardStyle, borderRadius: '22px', padding: '1.1rem', marginBottom: '1.2rem' },
   sectionHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.7rem', fontWeight: '700', letterSpacing: '0.8px' },
   cardTitle: { fontSize: '0.7rem', fontWeight: '700', letterSpacing: '0.8px', color: '#aaa' },
   highlightBadge: { fontSize: '0.7rem', fontWeight: '700', color: '#ff85a2', whiteSpace: 'nowrap' },
