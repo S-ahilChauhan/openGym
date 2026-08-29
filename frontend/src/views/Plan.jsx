@@ -290,8 +290,29 @@ export default function Plan({ rankWeeks = null } = {}) {
   };
 
   const handleWizardGenerate = (wizardData) => {
-    if (typeof generatePlanFromWizard !== 'function') return;
-    const { routines, newCustomExercises, updatedWeek, updatedCfg } = generatePlanFromWizard(wizardData, S);
+    if (!wizardData) return;
+
+    let routines = wizardData.routines;
+    let newCustomExercises = wizardData.newCustomExercises || [];
+    let updatedWeek = wizardData.updatedWeek;
+    let updatedCfg = wizardData.updatedCfg || {};
+
+    // Fallback: If raw wizard answers were passed instead of built routines
+    if ((!routines || routines.length === 0) && typeof generatePlanFromWizard === 'function') {
+      const generated = generatePlanFromWizard(wizardData, S);
+      if (generated) {
+        routines = generated.routines;
+        newCustomExercises = generated.newCustomExercises || [];
+        updatedWeek = generated.updatedWeek;
+        updatedCfg = generated.updatedCfg || {};
+      }
+    }
+
+    if (!routines || routines.length === 0) {
+      setImportMsg('⚠️ No active days were selected to generate routines.');
+      setTimeout(() => setImportMsg(''), 4000);
+      return;
+    }
 
     if (typeof update === 'function') {
       update((s) => {
@@ -306,12 +327,12 @@ export default function Plan({ rankWeeks = null } = {}) {
         s.customEx = [...s.customEx, ...uniqueCustom];
         s.exercises = [...s.exercises, ...uniqueCustom];
         s.routines = routines;
-        s.week = updatedWeek;
+        s.week = updatedWeek || s.week;
         s.cfg = { ...s.cfg, ...updatedCfg };
       });
     }
 
-    setImportMsg(`⚔️ Custom plan generated with ${routines?.length || 0} routines!`);
+    setImportMsg(`⚔️ Custom plan generated with ${routines.length} routine(s)!`);
     setTimeout(() => setImportMsg(''), 4000);
   };
 
@@ -619,17 +640,17 @@ export default function Plan({ rankWeeks = null } = {}) {
                 </div>
               ))}
             </div>
-         ) : (
-  <div className="empty">
-    <div className="ico"><Icon name="clipboard" /></div>
-    <div style={{ fontWeight: '700', fontSize: '0.9rem', color: '#fff', marginBottom: '4px' }}>
-      {t('No routines yet')}
-    </div>
-    <div style={{ color: '#888', fontSize: '0.78rem' }}>
-      {t('Choose a preset split above or start the wizard.')}
-    </div>
-  </div>
-)}
+          ) : (
+            <div className="empty">
+              <div className="ico"><Icon name="clipboard" /></div>
+              <div style={{ fontWeight: '700', fontSize: '0.9rem', color: '#fff', marginBottom: '4px' }}>
+                {t('No routines yet')}
+              </div>
+              <div style={{ color: '#888', fontSize: '0.78rem' }}>
+                {t('Choose a preset split above or start the wizard.')}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
