@@ -1,4 +1,8 @@
-// frontend/src/lib/exercises-data.js
+// frontend/src/lib/exercises.js
+//
+// Exercise database + lookup helpers.
+// EXDB fields: id, n (name), bp (body part), tg (target muscle), eq (equipment)
+
 export const EXDB = [
   // --- CHEST ---
   { id: "0001", n: "Barbell Bench Press", bp: "chest", tg: "pectorals", eq: "barbell" },
@@ -148,3 +152,60 @@ export const EXDB = [
   { id: "0705", n: "Jump Rope (Skipping)", bp: "cardio", tg: "cardio", eq: "rope" },
   { id: "0706", n: "Elliptical Trainer", bp: "cardio", tg: "cardio", eq: "machine" }
 ];
+
+// Pre-index for O(1) lookups
+const _byId = new Map(EXDB.map((ex) => [String(ex.id), ex]));
+
+/**
+ * Resolves exercise by ID with fallback support for store custom exercises
+ */
+export function exById(id, S = null) {
+  if (id == null) return undefined;
+  const strId = String(id);
+
+  // 1. Check official catalog Map
+  if (_byId.has(strId)) return _byId.get(strId);
+
+  // 2. Check store custom exercises if S is passed
+  if (S?.customEx && Array.isArray(S.customEx)) {
+    const foundCustom = S.customEx.find((x) => String(x.id) === strId);
+    if (foundCustom) return foundCustom;
+  }
+
+  return undefined;
+}
+
+export function findEx(id, S = null) {
+  const ex = exById(id, S);
+  if (!ex) {
+    throw new Error(`Exercise not found for id "${id}"`);
+  }
+  return ex;
+}
+
+export function searchEx(query = "", opts = {}, S = null) {
+  const q = query.trim().toLowerCase();
+  const { bodyPart, equipment } = opts;
+  const pool = S?.customEx ? [...EXDB, ...S.customEx] : EXDB;
+
+  return pool.filter((ex) => {
+    if (bodyPart && ex.bp !== bodyPart) return false;
+    if (equipment && ex.eq !== equipment) return false;
+    if (!q) return true;
+
+    return (
+      (ex.n && ex.n.toLowerCase().includes(q)) ||
+      (ex.bp && ex.bp.toLowerCase().includes(q)) ||
+      (ex.tg && ex.tg.toLowerCase().includes(q)) ||
+      (ex.eq && ex.eq.toLowerCase().includes(q))
+    );
+  });
+}
+
+export function allBodyParts() {
+  return [...new Set(EXDB.map((ex) => ex.bp))];
+}
+
+export function allEquipment() {
+  return [...new Set(EXDB.map((ex) => ex.eq))];
+}
