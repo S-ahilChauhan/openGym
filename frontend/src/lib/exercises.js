@@ -48,5 +48,22 @@ export const isBodyweightEq = idOrEx =>
 // a custom exercise deleted on another device before the sync arrived — still has to
 // render. A placeholder keeps it visible (and removable) instead of taking the whole view
 // down on the first `ex.n`.
-export const exOr = id => EXIDX[id] ||
-  { id, n: t('Unknown exercise'), bp: '', tg: '', eq: '', sm: [], st: [], missing: true }
+// In frontend/src/lib/exercises.js
+export const exOr = id => {
+  if (EXIDX[id]) return EXIDX[id];
+  
+  // Format clean name from ID if missing (e.g. 'custom_incline_dumbbell_press' -> 'Incline Dumbbell Press')
+  const fallbackName = typeof id === 'string' 
+    ? id.replace(/^(ex_|custom_)/, '').split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+    : 'Exercise';
+
+  return {
+    id,
+    n: fallbackName,
+    bp: 'general',
+    tg: 'general',
+    eq: 'other',
+    sm: [],
+    st: []
+  };
+};
