@@ -1,14 +1,16 @@
 // frontend/src/views/Profile.jsx
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
-import { useStore } from '../store/useStore.js';
+import { useStore, INITIAL_BIO_SCAN } from '../store/useStore.js';
 import { getStreakRank } from '../utils/ranks';
 import { streakWeeks } from '../lib/history.js';
+import BioScanCard from '../components/BioScanCard.jsx';
+import BioScanUploadModal from '../components/BioScanUploadModal.jsx';
 
 export default function Profile({ rankWeeks = null }) {
   const S = useStore((s) => s.S);
   const user = useStore((s) => s.user);
-  const patch = useStore((s) => s.patch);
+  const update = useStore((s) => s.update);
 
   // Compute rank dynamically
   const activeWeeks = rankWeeks !== null ? rankWeeks : streakWeeks(S);
@@ -18,20 +20,21 @@ export default function Profile({ rankWeeks = null }) {
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
+  const [showBioModal, setShowBioModal] = useState(false);
 
   // Editable Profile Fields (Default from store/state if available)
-  const [displayName, setDisplayName] = useState(S?.profile?.name || user?.name || 'Warrior');
+  const [displayName, setDisplayName] = useState(S?.profile?.name || user?.name || 'Sahil');
   const [userEmail, setUserEmail] = useState(user?.email || '');
-  const [goal, setGoal] = useState(S?.profile?.goal || 'Hypertrophy');
+  const [goal, setGoal] = useState(S?.profile?.goal || 'Lean Recomposition');
   const [split, setSplit] = useState(S?.profile?.split || 'Push / Pull / Legs');
-  const [heightCm, setHeightCm] = useState(S?.profile?.heightCm || '178');
-  const [targetWeight, setTargetWeight] = useState(S?.profile?.targetWeight || '78.0');
+  const [heightCm, setHeightCm] = useState(S?.profile?.heightCm || '170');
+  const [targetWeight, setTargetWeight] = useState(S?.profile?.targetWeight || '63.0');
   const [bio, setBio] = useState(S?.profile?.bio || 'Forging the demon back day by day.');
 
-  // Current weight pulled from store history or fallback
+  // Current weight pulled from bio-scan or store history
   const currentWeight = S?.bodyweight?.length 
     ? S.bodyweight[S.bodyweight.length - 1].w 
-    : 74.5;
+    : (S?.bioScan?.weight || 78.95);
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -49,8 +52,7 @@ export default function Profile({ rankWeeks = null }) {
           if (meta.bio && !S?.profile?.bio) setBio(meta.bio);
         }
       } catch (err) {
-        // Fallback gracefully without throwing
-        console.log('Running in local store mode');
+        // Local store fallback
       }
     };
     fetchUser();
@@ -71,14 +73,17 @@ export default function Profile({ rankWeeks = null }) {
         bio,
       };
 
-      // 1. Save locally to OpenGym store so it always persists
-      if (typeof patch === 'function') {
-        patch({ profile: profileData });
+      // 1. Save locally to OpenGym store
+      if (typeof update === 'function') {
+        update((s) => {
+          s.profile = profileData;
+          s.targetW = parseFloat(targetWeight) || s.targetW;
+        });
       } else {
         localStorage.setItem('openGym_profile', JSON.stringify(profileData));
       }
 
-      // 2. Check if a valid Supabase session exists before trying remote update
+      // 2. Sync to Supabase auth metadata if authenticated
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
         await supabase.auth.updateUser({
@@ -97,8 +102,6 @@ export default function Profile({ rankWeeks = null }) {
       setIsEditing(false);
       setTimeout(() => setMessage(''), 3000);
     } catch (err) {
-      console.error('Save status:', err);
-      // Even if cloud sync fails, local save worked
       setMessage('Profile saved locally! ⚔️');
       setIsEditing(false);
       setTimeout(() => setMessage(''), 3000);
@@ -243,7 +246,6 @@ export default function Profile({ rankWeeks = null }) {
           </button>
         </form>
       ) : (
-        /* Display View */
         <>
           {/* Main User Card */}
           <div style={styles.card}>
@@ -322,6 +324,47 @@ export default function Profile({ rankWeeks = null }) {
               </span>
             </div>
           </div>
+
+          {/* Smart Bio-Scan Section with Upload Trigger */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.8rem' }}>
+            <div style={styles.sectionHeader}>BODY COMPOSITION & BIO-SCAN</div>
+            <button
+              onClick={() => setShowBioModal(true)}
+              style={{
+                background: 'rgba(255,255,255,0.08)',
+                border: '1px solid rgba(255,255,255,0.15)',
+                color: '#fff',
+                fontSize: '0.7rem',
+                fontWeight: '700',
+                padding: '0.25rem 0.65rem',
+                borderRadius: '10px',
+                cursor: 'pointer'
+              }}
+            >
+              + Upload Report / Scan
+            </button>
+          </div>
+
+          <BioScanCard 
+            bioData={S?.bioScan || INITIAL_BIO_SCAN} 
+            badgeColor={currentRank.badgeColor} 
+          />
+
+          <BioScanUploadModal
+            isOpen={showBioModal}
+            onClose={() => setShowBioModal(false)}
+            badgeColor={currentRank.badgeColor}
+            onScanComplete={(newScan) => {
+              update((s) => {
+                s.bioScan = newScan;
+                if (newScan.weight) {
+                  s.bodyweight.push({ d: newScan.reportDate, w: newScan.weight });
+                }
+              });
+              setMessage('Bio-Scan successfully updated! 📊');
+              setTimeout(() => setMessage(''), 3000);
+            }}
+          />
         </>
       )}
 

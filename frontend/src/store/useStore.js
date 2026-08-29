@@ -1,3 +1,4 @@
+// frontend/src/store/useStore.js
 import { create } from 'zustand'
 import { supabase } from '../lib/supabase.js'
 import { fetchUserState, saveUserState } from '../lib/supabase-state.js'
@@ -7,17 +8,51 @@ import { DEMO, DEMO_SEEDED } from '../lib/demo.js'
 import { MOBILE, nativeLoad, nativeSave, syncReminder } from '../lib/mobile.js'
 
 const KEY = 'gym_state_v1'
+
+export const INITIAL_BIO_SCAN = {
+  reportDate: '2026-08-27',
+  weight: 78.95,
+  height: `5'7"`,
+  age: 25,
+  gender: 'Male',
+  bmi: 27.3,
+  bmr: 1623,
+  metabolicAge: 31,
+  bodyFatPct: 25.0,
+  subcutaneousFatPct: 23.0,
+  visceralFatIndex: 9,
+  fatMass: 20.0,
+  leanMass: 59.0,
+  muscleMass: 41.9,
+  boneMass: 2.9,
+  proteinPct: 16.0,
+  scores: {
+    overall: 73,
+    bodyComposition: 80,
+    fatAnalysis: 60,
+    metabolicIndicators: 80
+  },
+  targets: {
+    idealWeight: 63.0,
+    weightControl: 16.0,
+    targetFatMass: 15.0,
+    targetBodyFat: 20.0,
+    targetMetabolicAge: 27
+  }
+}
+
 export const DEF = {
   unit: 'kg', restSec: 90, sound: true, keepAwake: true, lang: 'en',
-  theme: 'dark', accent: 'lime', body: 'male', targetW: null,
-  bodyweight: [], routines: [], week: {}, dayPlan: {},
+  theme: 'dark', accent: 'lime', body: 'male', targetW: 63.0,
+  bodyweight: [
+    { d: '2026-08-27', w: 78.95 }
+  ],
+  routines: [], week: {}, dayPlan: {},
   exWeights: {}, workouts: [], active: null, customEx: [], gifSize: 'full',
-  // effort: which per-set effort scale is logged — 'none' | 'rir' | 'rpe'. null, not 'none', so
-  // that a profile which never chose (loaded state is overlaid on DEF, on every path: local,
-  // server pull, backup import) still falls back to the `showRir` boolean this replaced and
-  // keeps the column it had. See effortOf.
-  reminder: { on: false, time: '08:00', tz: null }, effort: null
+  reminder: { on: false, time: '08:00', tz: null }, effort: null,
+  bioScan: INITIAL_BIO_SCAN
 }
+
 const clone = o => JSON.parse(JSON.stringify(o))
 
 function loadState() {
@@ -34,8 +69,7 @@ export const useStore = create((set, get) => {
   let pushTm = null
   let saveTm = null
 
-  // Mobile build: mirror the state into a file in the app's data directory (survives WebView
-  // storage eviction) and keep the native reminder schedule in step with the weekly plan.
+  // Mobile build: mirror state into a file in the app's data directory
   const nativePersist = () => {
     clearTimeout(saveTm)
     saveTm = setTimeout(() => { saveTm = null; nativeSave(get().S); syncReminder(get().S) }, 800)
@@ -53,10 +87,6 @@ export const useStore = create((set, get) => {
     }
   }
 
-  // A setting changed right before switching away/closing the tab must not get lost mid-debounce
-  // (e.g. setting the reminder time then immediately backgrounding to test it). On mobile the
-  // same applies to the file mirror — backgrounding is often the last thing before the OS
-  // kills the app.
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState !== 'hidden') return
     if (MOBILE && saveTm) {
@@ -71,7 +101,6 @@ export const useStore = create((set, get) => {
     }
   })
 
-  // Everything a sign-out leaves behind on this device, whichever way it was triggered.
   const clearLocalSession = () => {
     get().setUser(null)
     localStorage.removeItem('gym_guest')
@@ -85,7 +114,6 @@ export const useStore = create((set, get) => {
     user: (() => { try { return JSON.parse(localStorage.getItem('gym_user')) || null } catch { return null } })(),
     ready: false,
 
-    // Mutate a draft of S via producer fn, then persist + schedule sync.
     update(mut, push = true) {
       const S = clone(get().S)
       mut(S)
@@ -127,43 +155,33 @@ export const useStore = create((set, get) => {
       clearLocalSession()
     },
 
-    // "Sign out everywhere": the server bumps this profile's session version, which kills every
-    // session it has on any device — this browser included, so the app has to end up exactly
-    // where a normal signOut leaves it. Unlike signOut the request is NOT swallowed: if it fails
-    // the sessions elsewhere are all still valid, and wiping this device's copy of the data
-    // would sign the user out of the one place the bump didn't reach. Caller reports the error.
     async signOutAll() {
-      await get().pushState()   // never throws — stores gym_dirty and moves on when offline
+      await get().pushState()
       await supabase.auth.signOut({ scope: 'global' })
       clearLocalSession()
     },
 
-    // Demo build only: drop the seeded example profile back in (Settings → "Reset demo data").
-    // Dynamic import so the generator never ships in a self-hosted bundle.
     async resetDemo() {
       const { buildDemoState } = await import('../lib/demoSeed.js')
       localStorage.removeItem('gym_dirty')
       persist(Object.assign(clone(DEF), buildDemoState()), false)
     },
 
-    // Boot: restore the Supabase session, then pull the account state.
     async boot() {
-      // Mobile build: no backend either — restore from the file mirror (the durable copy;
-      // localStorage may have been evicted since the last run) and go straight in.
       if (MOBILE) {
         const saved = await nativeLoad()
         const S = get().S
         if (saved && (!hasData(S) || (saved._ts || 0) >= (S._ts || 0))) {
           persist(Object.assign(clone(DEF), saved), false)
         } else if (hasData(S)) {
-          nativeSave(S)   // first run after an update from a file-less version: seed the mirror
+          nativeSave(S)
         }
         get().setGuest(true)
         syncReminder(get().S)
         set({ ready: true })
         return
       }
-      // Demo build (GitHub Pages): no backend at all — seed once, stay in guest mode.
+
       if (DEMO) {
         if (!localStorage.getItem(DEMO_SEEDED)) {
           localStorage.setItem(DEMO_SEEDED, '1')
@@ -173,14 +191,14 @@ export const useStore = create((set, get) => {
         set({ ready: true })
         return
       }
+
       try {
         const { data: { session } } = await supabase.auth.getSession()
         if (session?.user) {
           get().setUser(session.user)
           await get().pullState()
         } else get().setUser(null)
-        // Re-stamp the reminder's timezone on every load — keeps it correct if you're travelling,
-        // without needing to revisit Settings.
+
         const tz = localTZ()
         if (get().S.reminder?.on && get().S.reminder.tz !== tz) {
           get().update(s => { s.reminder = { ...s.reminder, tz } })
