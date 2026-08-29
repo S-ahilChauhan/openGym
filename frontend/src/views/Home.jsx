@@ -1,13 +1,19 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore, DEF } from '../store/useStore.js'
 import { effectiveRoutine, effectiveRoutineId, streakWeeks, lastBW, setsDoneActive } from '../lib/history.js'
 import { fmtNum, fmtDate, todayISO, isoOf, weekKey, DAYS } from '../lib/format.js'
 import { t as defaultT, dateLocale } from '../lib/i18n.js'
+import { getStreakRank } from '../lib/ranks.js'
 import { bwSheet, goalSheet, dayOverrideSheet, calendarSheet, startFlow, loadStarterPlan, bwDeltaColor } from '../sheets.jsx'
 import LineChart from '../components/LineChart.jsx'
 import Icon from '../components/Icon.jsx'
 import { Button } from '../components/ui.jsx'
+
+const ALL_RANK_IMAGES = [
+  '/bg-lvl1-novice.jpg', '/bg-lvl2-ronin.jpg', '/katana-bg.jpg?v=2',
+  '/bg-lvl4-demon.jpg', '/bg-lvl5-shogun.jpg', '/bg-lvl6-ogre.jpg'
+]
 
 export default function Home({ onNavigate, state, dispatch, t: propT } = {}) {
   const routerNavigate = useNavigate()
@@ -28,9 +34,19 @@ export default function Home({ onNavigate, state, dispatch, t: propT } = {}) {
   const profile = user?.profile
   const greetingName = user?.user_metadata?.full_name || profile?.name || user?.email?.split('@')[0] || 'Sahil'
   const [weekOffset, setWeekOffset] = useState(0)
+  const [devStreak, setDevStreak] = useState(null)
 
   const today = new Date()
   const routine = effectiveRoutine(S, todayISO())
+  const realStreak = streakWeeks(S)
+  const currentStreak = devStreak ?? realStreak
+  const rank = getStreakRank(currentStreak)
+  useEffect(() => {
+    ALL_RANK_IMAGES.forEach(src => {
+      const img = new Image()
+      img.src = src
+    })
+  }, [])
   const bw = lastBW(S)
   const prevBW = S.bodyweight.length > 1 ? S.bodyweight[S.bodyweight.length - 2] : null
   const delta = bw && prevBW ? bw.w - prevBW.w : null
@@ -56,20 +72,21 @@ export default function Home({ onNavigate, state, dispatch, t: propT } = {}) {
 
   const onToday = () => { if (S.active) nav('/workout'); else if (routine) startFlow(routine.id); else dayOverrideSheet(todayISO()) }
 
-  return <div className="narrow" style={hudStyles.container}>
+  return <div className="narrow" style={{ ...hudStyles.container, backgroundImage: `linear-gradient(180deg, rgba(8, 8, 10, 0.25) 0%, rgba(10, 10, 14, 0.45) 50%, rgba(10, 10, 14, 0.75) 100%), url('${rank.image}')` }}>
     <div className="hdr" style={hudStyles.header}>
-      <div>
-        <div style={hudStyles.dateLabel}>{today.toLocaleDateString(dateLocale(), { weekday: 'long', day: 'numeric', month: 'long' }).toUpperCase()}</div>
-        <h1 style={hudStyles.title}>{user ? `Hi ${greetingName}` : 'openGym'}</h1>
+      <div style={{ textAlign: 'left', margin: 0, padding: 0 }}>
+        <div style={{ ...hudStyles.dateLabel, color: rank.badgeColor }}>{today.toLocaleDateString(dateLocale(), { weekday: 'long', day: 'numeric', month: 'long' }).toUpperCase()}</div>
+        <h1 style={{ ...hudStyles.title, textAlign: 'left', margin: '0.15rem 0 0.4rem' }}>{user ? `Hi ${greetingName}` : 'openGym'}</h1>
+        <div style={{ ...hudStyles.rankBadge, color: rank.badgeColor, borderColor: rank.badgeColor, boxShadow: `0 0 10px ${rank.glowColor}` }}>⚔️ LVL {rank.level} · {rank.fullTitle}</div>
       </div>
-      <button className="iconbtn" style={hudStyles.streakPill} onClick={() => calendarSheet()} aria-label={t('View streak')}><span style={hudStyles.streakLabel}>{t('Workout streak')}</span><span style={hudStyles.fireIcon}>🔥</span><span style={hudStyles.streakNum}>{streakWeeks(S)}</span></button>
+      <button className="iconbtn" style={{ ...hudStyles.streakPill, borderColor: rank.badgeColor, boxShadow: `0 0 12px ${rank.glowColor}`, marginLeft: 'auto' }} onClick={() => calendarSheet()} aria-label={t('View streak')}><span style={{ ...hudStyles.fireIcon, fontSize: '0.95rem' }}>🔥</span><span style={hudStyles.streakNum}>{currentStreak}</span><span style={hudStyles.streakLabel}>{t('weeks')}</span></button>
     </div>
 
     <div className="card" style={hudStyles.card}>
       <div className="row between" style={{ ...hudStyles.sectionHeader, marginBottom: 12 }}>
         <button className="iconbtn" style={{ width: 30, height: 30, fontSize: 15 }} onClick={() => setWeekOffset(w => w - 1)} aria-label="Previous week"><Icon name="chevronLeft" /></button>
         <div style={hudStyles.cardTitle}>{t("THIS WEEK'S DISCIPLINE")}</div>
-        <div style={hudStyles.highlightBadge}>{completedThisWeek} / {plannedPerWeek || 0} {t('COMPLETED')}</div>
+        <div style={{ ...hudStyles.highlightBadge, color: rank.badgeColor }}>{rank.nextTarget}</div>
         <button className="iconbtn" style={{ width: 30, height: 30, fontSize: 15 }} onClick={() => setWeekOffset(w => w + 1)} aria-label="Next week"><Icon name="chevronRight" /></button>
       </div>
       <div className="week" style={hudStyles.weekRow}>{strip.map((day, i) => <div key={i} style={hudStyles.dayBox}>{day}</div>)}</div>
@@ -89,12 +106,12 @@ export default function Home({ onNavigate, state, dispatch, t: propT } = {}) {
 
     <div className="card" style={hudStyles.heroCard}>
       <div className="row between" style={hudStyles.heroTop}>
-        <span style={hudStyles.todayTag}>{t("TODAY'S BLADE")}</span>
+        <span style={{ ...hudStyles.todayTag, color: rank.badgeColor }}>{t("TODAY'S BLADE")}</span>
         <span style={hudStyles.timeTag}>{routine ? `${routine.exercises?.length || 0} ${t('EXERCISES')}` : t('REST DAY')}</span>
       </div>
       <h2 style={hudStyles.heroTitle}>{routine ? routine.name.toUpperCase() : t('REST DAY')}</h2>
       <p style={hudStyles.heroDesc}>{routine ? t('{0} exercises scheduled for today', routine.exercises?.length || 0) : t('Recover today. Return stronger tomorrow.')}</p>
-      <Button variant="primary" icon="play" onClick={onToday} style={hudStyles.unleashBtn}>{S.active ? t('Resume workout') : routine ? t('Begin session') : t('Plan today')}</Button>
+      <Button variant="primary" icon="play" onClick={onToday} style={{ ...hudStyles.unleashBtn, backgroundColor: rank.badgeColor }}>{S.active ? t('Resume workout') : routine ? t('Begin session') : t('Plan today')}</Button>
     </div>
 
     <div style={hudStyles.grid}>
@@ -147,19 +164,30 @@ export default function Home({ onNavigate, state, dispatch, t: propT } = {}) {
         <Icon name="calendar" className="chev" style={{ fontSize: 20 }} />
       </div>
     </div>
+
+    <div style={hudStyles.devBar}>
+      <span style={hudStyles.devLabel}>DEV PREVIEW</span>
+      <div style={hudStyles.devPillGroup}>
+        {[{ weeks: 0, label: 'L1: Novice' }, { weeks: 2, label: 'L2: Ronin' }, { weeks: 5, label: 'L3: Shadow' }, { weeks: 9, label: 'L4: Demon' }, { weeks: 16, label: 'L5: Shogun' }, { weeks: 26, label: 'L6: Ogre' }].map(item => {
+          const selected = getStreakRank(devStreak ?? realStreak).level === getStreakRank(item.weeks).level
+          return <button key={item.weeks} onClick={() => setDevStreak(item.weeks)} style={{ ...hudStyles.devBtn, backgroundColor: selected ? rank.badgeColor : 'rgba(255,255,255,0.1)', color: selected ? '#000' : '#fff', fontWeight: selected ? '800' : '500' }}>{item.label}</button>
+        })}
+      </div>
+    </div>
   </div>
 }
 
 const hudStyles = {
   container: {
-    minHeight: '100vh', width: '100%', position: 'relative', backgroundImage: "linear-gradient(180deg, rgba(8, 8, 10, 0.75) 0%, rgba(10, 10, 14, 0.90) 60%, rgba(10, 10, 14, 0.98) 100%), url('/katana-bg.jpg')",
+    minHeight: '100vh', width: '100%', position: 'relative', backgroundImage: "linear-gradient(180deg, rgba(8, 8, 10, 0.25) 0%, rgba(10, 10, 14, 0.45) 50%, rgba(10, 10, 14, 0.75) 100%), url('/katana-bg.jpg?v=2')",
     backgroundSize: 'cover', backgroundPosition: 'center right', backgroundRepeat: 'no-repeat', backgroundColor: '#0a0a0c',
-    color: '#fff', boxSizing: 'border-box', overflowX: 'hidden'
+    transition: 'background-image 0.5s ease-in-out', color: '#fff', boxSizing: 'border-box', overflowX: 'hidden'
   },
-  bgOverlay: { position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(8, 8, 10, 0.75) 0%, rgba(10, 10, 14, 0.90) 60%, rgba(10, 10, 14, 0.98) 100%)', zIndex: 1 },
-  header: { position: 'relative', zIndex: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '0 auto 1.6rem', padding: '2.5rem 1.25rem 0', maxWidth: '440px' },
+  bgOverlay: { position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(8, 8, 10, 0.25) 0%, rgba(10, 10, 14, 0.45) 50%, rgba(10, 10, 14, 0.75) 100%)', zIndex: 1 },
+  header: { position: 'relative', zIndex: 2, width: '100%', maxWidth: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', margin: '0 0 1.6rem', padding: '2rem 1rem 0.5rem', boxSizing: 'border-box' },
   dateLabel: { fontSize: '0.72rem', fontWeight: '700', letterSpacing: '1px', color: '#ff85a2', textTransform: 'uppercase' },
-  title: { fontSize: '2rem', fontWeight: '800', margin: '0.15rem 0 0', letterSpacing: '-0.5px' },
+  title: { fontSize: '1.8rem', fontWeight: '800', margin: '0.15rem 0 0.4rem', letterSpacing: '-0.5px', textShadow: '0 2px 10px rgba(0, 0, 0, 0.85)' },
+  rankBadge: { display: 'inline-flex', alignItems: 'center', gap: '5px', border: '1px solid', borderRadius: '16px', padding: '0.2rem 0.65rem', fontSize: '0.72rem', fontWeight: '700', backgroundColor: 'rgba(0,0,0,0.6)' },
   streakPill: { display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'rgba(20, 20, 24, 0.85)', border: '1.5px solid rgba(255, 133, 162, 0.45)', boxShadow: '0 4px 16px rgba(255, 133, 162, 0.25)', borderRadius: '40px', padding: '0.45rem 0.95rem', cursor: 'pointer' },
   fireIcon: { fontSize: '1rem' },
   streakNum: { fontSize: '1.05rem', fontWeight: '800', color: '#fff' },
@@ -182,5 +210,9 @@ const hudStyles = {
   statLabel: { fontSize: '0.72rem', color: '#888', fontWeight: '600' },
   statSub: { fontSize: '0.75rem', color: '#888' },
   statAction: { fontSize: '0.75rem', color: '#ff85a2', fontWeight: '600' },
-  unit: { fontSize: '0.85rem', color: '#aaa', fontWeight: '500' }
+  unit: { fontSize: '0.85rem', color: '#aaa', fontWeight: '500' },
+  devBar: { position: 'fixed', bottom: '4.8rem', left: '50%', transform: 'translateX(-50%)', zIndex: 999, width: '92%', maxWidth: '430px', backgroundColor: 'rgba(15, 15, 20, 0.92)', backdropFilter: 'blur(20px)', border: '1px solid rgba(255, 255, 255, 0.15)', borderRadius: '18px', padding: '0.6rem 0.8rem', boxSizing: 'border-box' },
+  devLabel: { display: 'block', fontSize: '0.65rem', fontWeight: '800', letterSpacing: '1px', color: '#888', marginBottom: '0.4rem' },
+  devPillGroup: { display: 'flex', gap: '0.3rem', overflowX: 'auto', paddingBottom: '2px' },
+  devBtn: { border: 'none', borderRadius: '12px', padding: '0.35rem 0.6rem', fontSize: '0.68rem', cursor: 'pointer', whiteSpace: 'nowrap' }
 }
