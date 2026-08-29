@@ -1,6 +1,6 @@
 // frontend/src/components/WorkoutBuddyModal.jsx
 import React, { useState } from 'react';
-import { generateBuddyInvitePayload, unpackBuddyInviteToken } from '../utils/BuddySync.js';
+import { generateBuddyInvitePayload, unpackBuddyInviteToken } from '../utils/buddySync.js';
 
 export default function WorkoutBuddyModal({ isOpen, onClose, S = {}, onApplyRoutine, badgeColor = '#FF85A2' }) {
   const [tab, setTab] = useState('share'); // 'share' | 'email' | 'join'
@@ -13,18 +13,16 @@ export default function WorkoutBuddyModal({ isOpen, onClose, S = {}, onApplyRout
 
   if (!isOpen) return null;
 
-  // Safe generation with fallback safeguards
-  let shareUrl = window.location.href;
+  let shareUrl = typeof window !== 'undefined' ? window.location.href : '';
   let token = '';
   try {
     const inviteData = generateBuddyInvitePayload(S || {}, weeks);
-    shareUrl = inviteData?.shareUrl || window.location.href;
+    shareUrl = inviteData?.shareUrl || shareUrl;
     token = inviteData?.encoded || '';
   } catch (err) {
     console.error('Error creating buddy invite:', err);
   }
 
-  // QR rendering using quickchart URL (built specifically for long encoded data URLs)
   const qrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(shareUrl)}&size=200&dark=ffffff&light=121218&ecLevel=L&format=svg`;
 
   const handleCopyLink = () => {
@@ -96,7 +94,6 @@ export default function WorkoutBuddyModal({ isOpen, onClose, S = {}, onApplyRout
   return (
     <div style={styles.backdrop} onClick={onClose}>
       <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
-        {/* Header */}
         <div style={styles.header}>
           <div>
             <span style={{ fontSize: '0.68rem', fontWeight: '800', color: badgeColor, letterSpacing: '1px' }}>
@@ -107,7 +104,6 @@ export default function WorkoutBuddyModal({ isOpen, onClose, S = {}, onApplyRout
           <button onClick={onClose} style={styles.closeBtn}>✕</button>
         </div>
 
-        {/* Tab Navigation */}
         <div style={styles.tabNav}>
           <button
             type="button"
@@ -144,7 +140,6 @@ export default function WorkoutBuddyModal({ isOpen, onClose, S = {}, onApplyRout
           </button>
         </div>
 
-        {/* TAB 1: SHARE QR & CODE */}
         {tab === 'share' && (
           <div style={styles.contentCol}>
             <div style={styles.selectorRow}>
@@ -162,16 +157,12 @@ export default function WorkoutBuddyModal({ isOpen, onClose, S = {}, onApplyRout
               </select>
             </div>
 
-            {/* QR Code Container */}
             <div style={styles.qrBox}>
               <img
                 src={qrUrl}
                 alt="Forge Duo QR"
                 style={{ width: '170px', height: '170px', borderRadius: '10px' }}
-                onError={(e) => {
-                  // Graceful fallback if offline
-                  e.target.style.display = 'none';
-                }}
+                onError={(e) => { e.target.style.display = 'none'; }}
               />
             </div>
 
@@ -194,7 +185,6 @@ export default function WorkoutBuddyModal({ isOpen, onClose, S = {}, onApplyRout
           </div>
         )}
 
-        {/* TAB 2: INVITE VIA EMAIL */}
         {tab === 'email' && (
           <form onSubmit={handleSendEmail} style={styles.contentCol}>
             <span style={{ fontSize: '0.75rem', color: '#888' }}>
@@ -217,7 +207,6 @@ export default function WorkoutBuddyModal({ isOpen, onClose, S = {}, onApplyRout
           </form>
         )}
 
-        {/* TAB 3: JOIN WITH CODE */}
         {tab === 'join' && (
           <form onSubmit={handleJoinByCode} style={styles.contentCol}>
             <span style={{ fontSize: '0.75rem', color: '#888' }}>
