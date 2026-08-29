@@ -67,3 +67,14 @@ export const exOr = id => {
     st: []
   };
 };
+// frontend/src/lib/exercises.js (append at bottom)
+
+export const MAJOR_MUSCLE_GROUPS = [
+  { id: 'chest', label: 'Chest', icon: '🛡️', bodyPart: 'chest' },
+  { id: 'back', label: 'Back', icon: '🦅', bodyPart: 'back' },
+  { id: 'shoulders', label: 'Shoulders', icon: '🎯', bodyPart: 'shoulders' },
+  { id: 'biceps', label: 'Biceps', icon: '💪', bodyPart: 'upper arms' },
+  { id: 'triceps', label: 'Triceps', icon: '⚡', bodyPart: 'upper arms' },
+  { id: 'legs', label: 'Legs', icon: '🦵', bodyPart: 'upper legs' },
+  { id: 'core', label: 'Core', icon: '🔥', bodyPart: 'waist' },
+];
