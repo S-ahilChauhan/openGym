@@ -11,6 +11,7 @@ import LineChart from '../components/LineChart.jsx'
 import Icon from '../components/Icon.jsx'
 import { Button } from '../components/ui.jsx'
 import MacroFuelGrid from '../components/MacroFuelGrid.jsx'
+import WarriorAvatar3D from '../components/WarriorAvatar3D.jsx'
 
 export default function Home({ onNavigate, state, dispatch, t: propT, rankDays = null } = {}) {
   const routerNavigate = useNavigate()
@@ -25,7 +26,9 @@ export default function Home({ onNavigate, state, dispatch, t: propT, rankDays =
     workouts: (state || storedState)?.workouts || [],
     week: (state || storedState)?.week || {},
     dayPlan: (state || storedState)?.dayPlan || {},
-    diet: (state || storedState)?.diet || DEF.diet
+    diet: (state || storedState)?.diet || DEF.diet,
+    profile: (state || storedState)?.profile || DEF.profile,
+    bioScan: (state || storedState)?.bioScan || DEF.bioScan
   }
   const user = useStore(s => s.user)
   const t = typeof propT === 'function' ? propT : defaultT
@@ -220,6 +223,13 @@ export default function Home({ onNavigate, state, dispatch, t: propT, rankDays =
         </div>
       </div>
 
+      {/* 4. 3D Biometric Avatar Card */}
+      <WarriorAvatar3D
+        profile={S.profile}
+        bioScan={S.bioScan}
+        accent={rank.badgeColor || '#34D399'}
+      />
+
       {!S.routines.length && !S.active && (
         <div className="card" style={hudStyles.card}>
           <div className="row" style={{ gap: 10, marginBottom: 6 }}>
@@ -235,7 +245,7 @@ export default function Home({ onNavigate, state, dispatch, t: propT, rankDays =
         </div>
       )}
 
-      {/* 4. Today's Blade */}
+      {/* 5. Today's Blade */}
       <div style={{ ...hudStyles.heroCard, borderColor: `${rank.badgeColor}40` }}>
         <div className="row between" style={hudStyles.heroTop}>
           <span style={{ ...hudStyles.todayTag, color: rank.badgeColor }}>{t("TODAY'S BLADE")}</span>
@@ -268,7 +278,7 @@ export default function Home({ onNavigate, state, dispatch, t: propT, rankDays =
         )}
       </div>
 
-      {/* 5. Daily Macro Grid (Tap jumps straight to /diet) */}
+      {/* 6. Daily Macro Grid (Tap jumps straight to /diet) */}
       <div style={{ marginBottom: '1.2rem' }}>
         <MacroFuelGrid
           dietData={S.diet}
@@ -277,7 +287,7 @@ export default function Home({ onNavigate, state, dispatch, t: propT, rankDays =
         />
       </div>
 
-      {/* 6. Body Weight Tracker */}
+      {/* 7. Body Weight Tracker */}
       <div className="card" style={hudStyles.card}>
         <div className="row between" style={{ marginBottom: 6 }}>
           <h2 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800 }}>{t('Body weight')}</h2>
