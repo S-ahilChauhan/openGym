@@ -2,12 +2,13 @@
 import { supabase } from './supabase.js'
 
 /**
- * Fetch the entire user state blob from Supabase
+ * Fetch the user state blob or recent entries from Supabase
  */
 export async function fetchUserState() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Not authenticated')
 
+  // Option A: If you are still using an app_state table for overall sync
   const { data, error } = await supabase
     .from('app_state')
     .select('state')
@@ -23,14 +24,13 @@ export async function fetchUserState() {
 }
 
 /**
- * Save the entire state blob back to Supabase (with automatic Unicode sanitization)
+ * Save the state blob back to Supabase and sync daily entries into public.entries
  */
 export async function saveUserState(stateBlob) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Not authenticated')
 
-  // Sanitize the JSON string to remove null bytes (\u0000) and unsupported control characters
-  // that cause Postgres 22P05 unicode escape sequence crashes.
+  // 1. Sanitize JSON string to prevent Postgres 22P05 unicode/null-byte errors
   let cleanBlob = stateBlob
   try {
     const rawString = JSON.stringify(stateBlob)
@@ -40,6 +40,7 @@ export async function saveUserState(stateBlob) {
     console.warn('Could not sanitize state blob, falling back to original:', err)
   }
 
+  // 2. Save entire state blob to app_state table (maintains your existing sync setup)
   const { error } = await supabase
     .from('app_state')
     .upsert({
@@ -49,7 +50,23 @@ export async function saveUserState(stateBlob) {
     })
 
   if (error) {
-    console.error('Error saving state:', error)
+    console.error('Error saving state to app_state:', error)
     throw error
+  }
+
+  // 3. (Optional) If you want to automatically mirror daily workouts/weights into your new public.entries table:
+  try {
+    if (cleanBlob?.workouts && Array.isArray(cleanBlob.workouts)) {
+      for (const workout of cleanBlob.workouts) {
+        if (!workout.date) continue
+        await supabase.from('entries').upsert({
+          date: workout.date.split('T')[0], // format as YYYY-MM-DD
+          workout: workout,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'date' })
+      }
+    }
+  } catch (entryErr) {
+    console.warn('Could not sync individual entries to public.entries:', entryErr)
   }
 }
