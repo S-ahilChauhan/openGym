@@ -20,7 +20,7 @@ export default function Profile({ rankWeeks = null }) {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [showBioModal, setShowBioModal] = useState(false);
-  const [activeTab, setActiveTab] = useState('measurements');
+  const [activeTab, setActiveTab] = useState('basic');
 
   const p = S?.profile || {};
 
@@ -28,54 +28,54 @@ export default function Profile({ rankWeeks = null }) {
     return new Date().toISOString().slice(0, 10);
   }
 
-  // Form State
-  const [displayName, setDisplayName] = useState(p.name || user?.name || 'Sahil');
+  // Sanitized & Dynamic Initial State (No hardcoded personal data)
+  const [displayName, setDisplayName] = useState(p.name || user?.name || '');
   const [userEmail, setUserEmail] = useState(user?.email || '');
-  const [heightCm, setHeightCm] = useState(p.heightCm || '170');
-  const [bio, setBio] = useState(p.bio || 'Forging the demon back day by day.');
-  const [bloodGroup, setBloodGroup] = useState(p.bloodGroup || 'O+');
-  const [restingHR, setRestingHR] = useState(p.restingHR || '68');
-  const [bloodPressure, setBloodPressure] = useState(p.bloodPressure || '120/80');
+  const [heightCm, setHeightCm] = useState(p.heightCm || '');
+  const [bio, setBio] = useState(p.bio || '');
+  const [bloodGroup, setBloodGroup] = useState(p.bloodGroup || 'Select');
+  const [restingHR, setRestingHR] = useState(p.restingHR || '');
+  const [bloodPressure, setBloodPressure] = useState(p.bloodPressure || '');
   const [injuries, setInjuries] = useState(p.injuries || 'None');
   const [allergies, setAllergies] = useState(p.allergies || 'None');
   const [somatotype, setSomatotype] = useState(p.somatotype || 'Mesomorph');
   const [dominantHand, setDominantHand] = useState(p.dominantHand || 'Right');
-  const [trainingDays, setTrainingDays] = useState(p.trainingDays || '5');
+  const [trainingDays, setTrainingDays] = useState(p.trainingDays || '4');
   const [sessionDuration, setSessionDuration] = useState(p.sessionDuration || '60');
   const [equipment, setEquipment] = useState(p.equipment || 'Full Gym');
   const [avoidExercises, setAvoidExercises] = useState(p.avoidExercises || '');
-  const [targetWeight, setTargetWeight] = useState(p.targetWeight || '63.0');
-  const [targetBodyFat, setTargetBodyFat] = useState(p.targetBodyFat || '18.0');
-  const [targetDate, setTargetDate] = useState(p.targetDate || '2026-12-31');
-  const [goal, setGoal] = useState(p.goal || 'Lean Recomposition');
+  const [targetWeight, setTargetWeight] = useState(p.targetWeight || '');
+  const [targetBodyFat, setTargetBodyFat] = useState(p.targetBodyFat || '');
+  const [targetDate, setTargetDate] = useState(p.targetDate || '');
+  const [goal, setGoal] = useState(p.goal || 'Hypertrophy');
 
-  // Tape Measurements & Timestamp
+  // Blank tape measurements
   const [measurements, setMeasurements] = useState(p.measurements || {
-    chest: '39.0',
-    waist: '33.5',
-    hips: '38.0',
-    bicepL: '14.0',
-    bicepR: '14.2',
-    thighL: '22.0',
-    thighR: '22.0',
-    calfL: '14.5',
-    calfR: '14.5',
-    neck: '15.0',
-    shoulders: '45.0'
+    chest: '',
+    waist: '',
+    hips: '',
+    bicepL: '',
+    bicepR: '',
+    thighL: '',
+    thighR: '',
+    calfL: '',
+    calfR: '',
+    neck: '',
+    shoulders: ''
   });
-  const measurementsUpdated = p.measurementsUpdatedAt || todayDate();
+  const measurementsUpdated = p.measurementsUpdatedAt || 'Not recorded';
 
   // Extended Body Composition
-  const [waterPct, setWaterPct] = useState(p.waterPct || '56.0');
-  const [boneDensityScore, setBoneDensityScore] = useState(p.boneDensityScore || '+1.2');
+  const [waterPct, setWaterPct] = useState(p.waterPct || '');
+  const [boneDensityScore, setBoneDensityScore] = useState(p.boneDensityScore || '');
 
   // Progress Photos
-  const [photos, setPhotos] = useState(p.photos || { front: null, side: null, back: null, date: todayDate() });
+  const [photos, setPhotos] = useState(p.photos || { front: null, side: null, back: null, date: null });
 
   // Latest Weight & Weight Last Updated Date
   const latestBWEntry = S?.bodyweight?.length ? S.bodyweight[S.bodyweight.length - 1] : null;
-  const currentWeight = latestBWEntry ? latestBWEntry.w : (S?.bioScan?.weight || 78.95);
-  const weightUpdatedDate = latestBWEntry?.d ? fmtDate(latestBWEntry.d, true) : (S?.bioScan?.reportDate || 'Recent');
+  const currentWeight = latestBWEntry ? latestBWEntry.w : (S?.bioScan?.weight || null);
+  const weightUpdatedDate = latestBWEntry?.d ? fmtDate(latestBWEntry.d, true) : (S?.bioScan?.reportDate || 'Not recorded');
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -83,6 +83,9 @@ export default function Profile({ rankWeeks = null }) {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
           setUserEmail(session.user.email || '');
+          if (!displayName && session.user.user_metadata?.name) {
+            setDisplayName(session.user.user_metadata.name);
+          }
         }
       } catch (err) {}
     };
@@ -137,7 +140,7 @@ export default function Profile({ rankWeeks = null }) {
     try {
       update((s) => {
         s.profile = profileData;
-        s.targetW = parseFloat(targetWeight) || s.targetW;
+        if (targetWeight) s.targetW = parseFloat(targetWeight);
       });
 
       const { data: { session } } = await supabase.auth.getSession();
@@ -226,12 +229,25 @@ export default function Profile({ rankWeeks = null }) {
             <div style={styles.sectionCol}>
               <div style={styles.inputGroup}>
                 <label style={styles.inputLabel}>CALL-SIGN / NAME</label>
-                <input type="text" value={displayName} onChange={(e) => setDisplayName(e.target.value)} style={styles.textInput} required />
+                <input 
+                  type="text" 
+                  placeholder="Enter your name"
+                  value={displayName} 
+                  onChange={(e) => setDisplayName(e.target.value)} 
+                  style={styles.textInput} 
+                  required 
+                />
               </div>
               <div style={styles.grid2}>
                 <div style={styles.inputGroup}>
                   <label style={styles.inputLabel}>HEIGHT (CM)</label>
-                  <input type="number" value={heightCm} onChange={(e) => setHeightCm(e.target.value)} style={styles.textInput} />
+                  <input 
+                    type="number" 
+                    placeholder="e.g. 175"
+                    value={heightCm} 
+                    onChange={(e) => setHeightCm(e.target.value)} 
+                    style={styles.textInput} 
+                  />
                 </div>
                 <div style={styles.inputGroup}>
                   <label style={styles.inputLabel}>SOMATOTYPE</label>
@@ -252,7 +268,12 @@ export default function Profile({ rankWeeks = null }) {
               </div>
               <div style={styles.inputGroup}>
                 <label style={styles.inputLabel}>WARRIOR MANTRA / BIO</label>
-                <textarea value={bio} onChange={(e) => setBio(e.target.value)} style={{ ...styles.textInput, minHeight: '60px' }} />
+                <textarea 
+                  placeholder="Your personal fitness quote or motivation..."
+                  value={bio} 
+                  onChange={(e) => setBio(e.target.value)} 
+                  style={{ ...styles.textInput, minHeight: '60px' }} 
+                />
               </div>
             </div>
           )}
@@ -260,49 +281,49 @@ export default function Profile({ rankWeeks = null }) {
           {/* TAB 2: TAPE MEASUREMENTS (INCHES) */}
           {activeTab === 'tape' && (
             <div style={styles.sectionCol}>
-              <div style={styles.sectionHelp}>Track monthly limb & torso girth (Inches)</div>
+              <div style={styles.sectionHelp}>Track limb & torso girth in inches:</div>
               <div style={styles.grid3}>
                 <div style={styles.inputGroup}>
                   <label style={styles.inputLabel}>CHEST</label>
-                  <input type="number" step="0.1" value={measurements.chest || ''} onChange={(e) => setMeasurements({ ...measurements, chest: e.target.value })} style={styles.textInput} />
+                  <input type="number" step="0.1" placeholder="—" value={measurements.chest || ''} onChange={(e) => setMeasurements({ ...measurements, chest: e.target.value })} style={styles.textInput} />
                 </div>
                 <div style={styles.inputGroup}>
                   <label style={styles.inputLabel}>WAIST</label>
-                  <input type="number" step="0.1" value={measurements.waist || ''} onChange={(e) => setMeasurements({ ...measurements, waist: e.target.value })} style={styles.textInput} />
+                  <input type="number" step="0.1" placeholder="—" value={measurements.waist || ''} onChange={(e) => setMeasurements({ ...measurements, waist: e.target.value })} style={styles.textInput} />
                 </div>
                 <div style={styles.inputGroup}>
                   <label style={styles.inputLabel}>HIPS</label>
-                  <input type="number" step="0.1" value={measurements.hips || ''} onChange={(e) => setMeasurements({ ...measurements, hips: e.target.value })} style={styles.textInput} />
+                  <input type="number" step="0.1" placeholder="—" value={measurements.hips || ''} onChange={(e) => setMeasurements({ ...measurements, hips: e.target.value })} style={styles.textInput} />
                 </div>
               </div>
               <div style={styles.grid2}>
                 <div style={styles.inputGroup}>
                   <label style={styles.inputLabel}>LEFT BICEP</label>
-                  <input type="number" step="0.1" value={measurements.bicepL || ''} onChange={(e) => setMeasurements({ ...measurements, bicepL: e.target.value })} style={styles.textInput} />
+                  <input type="number" step="0.1" placeholder="—" value={measurements.bicepL || ''} onChange={(e) => setMeasurements({ ...measurements, bicepL: e.target.value })} style={styles.textInput} />
                 </div>
                 <div style={styles.inputGroup}>
                   <label style={styles.inputLabel}>RIGHT BICEP</label>
-                  <input type="number" step="0.1" value={measurements.bicepR || ''} onChange={(e) => setMeasurements({ ...measurements, bicepR: e.target.value })} style={styles.textInput} />
+                  <input type="number" step="0.1" placeholder="—" value={measurements.bicepR || ''} onChange={(e) => setMeasurements({ ...measurements, bicepR: e.target.value })} style={styles.textInput} />
                 </div>
               </div>
               <div style={styles.grid2}>
                 <div style={styles.inputGroup}>
                   <label style={styles.inputLabel}>LEFT THIGH</label>
-                  <input type="number" step="0.1" value={measurements.thighL || ''} onChange={(e) => setMeasurements({ ...measurements, thighL: e.target.value })} style={styles.textInput} />
+                  <input type="number" step="0.1" placeholder="—" value={measurements.thighL || ''} onChange={(e) => setMeasurements({ ...measurements, thighL: e.target.value })} style={styles.textInput} />
                 </div>
                 <div style={styles.inputGroup}>
                   <label style={styles.inputLabel}>RIGHT THIGH</label>
-                  <input type="number" step="0.1" value={measurements.thighR || ''} onChange={(e) => setMeasurements({ ...measurements, thighR: e.target.value })} style={styles.textInput} />
+                  <input type="number" step="0.1" placeholder="—" value={measurements.thighR || ''} onChange={(e) => setMeasurements({ ...measurements, thighR: e.target.value })} style={styles.textInput} />
                 </div>
               </div>
               <div style={styles.grid2}>
                 <div style={styles.inputGroup}>
                   <label style={styles.inputLabel}>SHOULDERS</label>
-                  <input type="number" step="0.1" value={measurements.shoulders || ''} onChange={(e) => setMeasurements({ ...measurements, shoulders: e.target.value })} style={styles.textInput} />
+                  <input type="number" step="0.1" placeholder="—" value={measurements.shoulders || ''} onChange={(e) => setMeasurements({ ...measurements, shoulders: e.target.value })} style={styles.textInput} />
                 </div>
                 <div style={styles.inputGroup}>
                   <label style={styles.inputLabel}>NECK</label>
-                  <input type="number" step="0.1" value={measurements.neck || ''} onChange={(e) => setMeasurements({ ...measurements, neck: e.target.value })} style={styles.textInput} />
+                  <input type="number" step="0.1" placeholder="—" value={measurements.neck || ''} onChange={(e) => setMeasurements({ ...measurements, neck: e.target.value })} style={styles.textInput} />
                 </div>
               </div>
             </div>
@@ -315,34 +336,35 @@ export default function Profile({ rankWeeks = null }) {
                 <div style={styles.inputGroup}>
                   <label style={styles.inputLabel}>BLOOD GROUP</label>
                   <select value={bloodGroup} onChange={(e) => setBloodGroup(e.target.value)} style={styles.selectInput}>
+                    <option value="Select">Select</option>
                     {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(bg => <option key={bg} value={bg}>{bg}</option>)}
                   </select>
                 </div>
                 <div style={styles.inputGroup}>
                   <label style={styles.inputLabel}>RESTING HR (BPM)</label>
-                  <input type="number" value={restingHR} onChange={(e) => setRestingHR(e.target.value)} style={styles.textInput} />
+                  <input type="number" placeholder="e.g. 65" value={restingHR} onChange={(e) => setRestingHR(e.target.value)} style={styles.textInput} />
                 </div>
                 <div style={styles.inputGroup}>
                   <label style={styles.inputLabel}>BP (SYS/DIA)</label>
-                  <input type="text" value={bloodPressure} onChange={(e) => setBloodPressure(e.target.value)} style={styles.textInput} />
+                  <input type="text" placeholder="e.g. 120/80" value={bloodPressure} onChange={(e) => setBloodPressure(e.target.value)} style={styles.textInput} />
                 </div>
               </div>
               <div style={styles.inputGroup}>
                 <label style={styles.inputLabel}>KNOWN INJURIES / LIMITATIONS</label>
-                <input type="text" placeholder="e.g. Left shoulder impingement, lower back stiffness" value={injuries} onChange={(e) => setInjuries(e.target.value)} style={styles.textInput} />
+                <input type="text" placeholder="e.g. Shoulder impingement, knee pain, or None" value={injuries} onChange={(e) => setInjuries(e.target.value)} style={styles.textInput} />
               </div>
               <div style={styles.inputGroup}>
                 <label style={styles.inputLabel}>ALLERGIES & MEDICAL NOTES</label>
-                <input type="text" placeholder="e.g. Lactose intolerant, Penicillin" value={allergies} onChange={(e) => setAllergies(e.target.value)} style={styles.textInput} />
+                <input type="text" placeholder="e.g. None" value={allergies} onChange={(e) => setAllergies(e.target.value)} style={styles.textInput} />
               </div>
               <div style={styles.grid2}>
                 <div style={styles.inputGroup}>
                   <label style={styles.inputLabel}>BODY WATER (%)</label>
-                  <input type="number" step="0.1" value={waterPct} onChange={(e) => setWaterPct(e.target.value)} style={styles.textInput} />
+                  <input type="number" step="0.1" placeholder="Optional" value={waterPct} onChange={(e) => setWaterPct(e.target.value)} style={styles.textInput} />
                 </div>
                 <div style={styles.inputGroup}>
                   <label style={styles.inputLabel}>BONE DENSITY SCORE</label>
-                  <input type="text" value={boneDensityScore} onChange={(e) => setBoneDensityScore(e.target.value)} style={styles.textInput} />
+                  <input type="text" placeholder="Optional" value={boneDensityScore} onChange={(e) => setBoneDensityScore(e.target.value)} style={styles.textInput} />
                 </div>
               </div>
             </div>
@@ -355,12 +377,12 @@ export default function Profile({ rankWeeks = null }) {
                 <div style={styles.inputGroup}>
                   <label style={styles.inputLabel}>DAYS / WEEK</label>
                   <select value={trainingDays} onChange={(e) => setTrainingDays(e.target.value)} style={styles.selectInput}>
-                    {['3', '4', '5', '6', '7'].map(d => <option key={d} value={d}>{d} Days</option>)}
+                    {['2', '3', '4', '5', '6', '7'].map(d => <option key={d} value={d}>{d} Days</option>)}
                   </select>
                 </div>
                 <div style={styles.inputGroup}>
                   <label style={styles.inputLabel}>SESSION TIME (MINS)</label>
-                  <input type="number" value={sessionDuration} onChange={(e) => setSessionDuration(e.target.value)} style={styles.textInput} />
+                  <input type="number" placeholder="60" value={sessionDuration} onChange={(e) => setSessionDuration(e.target.value)} style={styles.textInput} />
                 </div>
               </div>
               <div style={styles.inputGroup}>
@@ -384,20 +406,21 @@ export default function Profile({ rankWeeks = null }) {
               <div style={styles.inputGroup}>
                 <label style={styles.inputLabel}>PRIMARY GOAL</label>
                 <select value={goal} onChange={(e) => setGoal(e.target.value)} style={styles.selectInput}>
+                  <option value="Hypertrophy">Hypertrophy (Muscle Building)</option>
                   <option value="Lean Recomposition">Lean Recomposition (Lose Fat & Gain Muscle)</option>
-                  <option value="Hypertrophy">Hypertrophy (Pure Muscle Mass)</option>
                   <option value="Raw Strength">Raw Strength & Powerlifting</option>
+                  <option value="Fat Loss">Fat Loss & Definition</option>
                   <option value="Athletic Conditioning">Athletic Conditioning</option>
                 </select>
               </div>
               <div style={styles.grid3}>
                 <div style={styles.inputGroup}>
                   <label style={styles.inputLabel}>TARGET WT (KG)</label>
-                  <input type="number" step="0.1" value={targetWeight} onChange={(e) => setTargetWeight(e.target.value)} style={styles.textInput} />
+                  <input type="number" step="0.1" placeholder="e.g. 75" value={targetWeight} onChange={(e) => setTargetWeight(e.target.value)} style={styles.textInput} />
                 </div>
                 <div style={styles.inputGroup}>
                   <label style={styles.inputLabel}>TARGET BODY FAT %</label>
-                  <input type="number" step="0.1" value={targetBodyFat} onChange={(e) => setTargetBodyFat(e.target.value)} style={styles.textInput} />
+                  <input type="number" step="0.1" placeholder="e.g. 15" value={targetBodyFat} onChange={(e) => setTargetBodyFat(e.target.value)} style={styles.textInput} />
                 </div>
                 <div style={styles.inputGroup}>
                   <label style={styles.inputLabel}>TARGET DATE</label>
@@ -410,7 +433,7 @@ export default function Profile({ rankWeeks = null }) {
           {/* TAB 6: PROGRESS PHOTOS */}
           {activeTab === 'photos' && (
             <div style={styles.sectionCol}>
-              <div style={styles.sectionHelp}>Upload front, side & back check-in photos</div>
+              <div style={styles.sectionHelp}>Upload front, side & back check-in photos:</div>
               <div style={styles.grid3}>
                 {['front', 'side', 'back'].map((pose) => (
                   <div key={pose} style={styles.photoUploadBox}>
@@ -459,9 +482,9 @@ export default function Profile({ rankWeeks = null }) {
                 ⚔️
               </div>
               <div style={{ flex: 1 }}>
-                <h2 style={styles.userName}>{displayName}</h2>
-                <span style={styles.userEmail}>{userEmail || 'Local Warrior Account'}</span>
-                <p style={styles.bioText}>"{bio}"</p>
+                <h2 style={styles.userName}>{displayName || 'Warrior'}</h2>
+                <span style={styles.userEmail}>{userEmail || 'Local Account'}</span>
+                {bio && <p style={styles.bioText}>"{bio}"</p>}
               </div>
             </div>
 
@@ -478,7 +501,7 @@ export default function Profile({ rankWeeks = null }) {
             </div>
           </div>
 
-          {/* Physique & Goal Matrix with Weight Last Updated Date */}
+          {/* Physical Archetype & Targets */}
           <div style={styles.sectionHeader}>PHYSICAL ARCHETYPE & TARGETS</div>
           <div style={styles.grid3}>
             <div style={styles.statBox}>
@@ -486,13 +509,21 @@ export default function Profile({ rankWeeks = null }) {
                 <span style={styles.statLabel}>Current Weight</span>
                 <span style={styles.timestampBadge}>{weightUpdatedDate}</span>
               </div>
-              <div style={styles.statVal}>{currentWeight} <span style={styles.unit}>kg</span></div>
-              <span style={{ fontSize: '0.65rem', color: '#888' }}>Target: {targetWeight} kg</span>
+              <div style={styles.statVal}>
+                {currentWeight ? currentWeight : '—'} <span style={styles.unit}>{currentWeight ? 'kg' : ''}</span>
+              </div>
+              <span style={{ fontSize: '0.65rem', color: '#888' }}>
+                Target: {targetWeight ? `${targetWeight} kg` : 'Not set'}
+              </span>
             </div>
             <div style={styles.statBox}>
               <span style={styles.statLabel}>Body Fat</span>
-              <div style={styles.statVal}>{S?.bioScan?.bodyFatPct || '25.0'} <span style={styles.unit}>%</span></div>
-              <span style={{ fontSize: '0.65rem', color: '#888' }}>Target: {targetBodyFat}%</span>
+              <div style={styles.statVal}>
+                {S?.bioScan?.bodyFatPct ? S.bioScan.bodyFatPct : '—'} <span style={styles.unit}>{S?.bioScan?.bodyFatPct ? '%' : ''}</span>
+              </div>
+              <span style={{ fontSize: '0.65rem', color: '#888' }}>
+                Target: {targetBodyFat ? `${targetBodyFat}%` : 'Not set'}
+              </span>
             </div>
             <div style={styles.statBox}>
               <span style={styles.statLabel}>Somatotype</span>
@@ -501,33 +532,35 @@ export default function Profile({ rankWeeks = null }) {
             </div>
           </div>
 
-          {/* Tape Measurements Card with Last Updated Header */}
+          {/* Tape Measurements Card */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.3rem' }}>
             <div style={styles.sectionHeader}>BODY TAPE MEASUREMENTS (INCHES)</div>
             <span style={styles.timestampBadge}>Updated: {measurementsUpdated}</span>
           </div>
           <div style={styles.card}>
             <div style={styles.measureGrid}>
-              <div style={styles.measureItem}><span style={styles.mLabel}>Chest</span><span style={styles.mVal}>{measurements.chest || '—'}"</span></div>
-              <div style={styles.measureItem}><span style={styles.mLabel}>Waist</span><span style={styles.mVal}>{measurements.waist || '—'}"</span></div>
-              <div style={styles.measureItem}><span style={styles.mLabel}>Hips</span><span style={styles.mVal}>{measurements.hips || '—'}"</span></div>
-              <div style={styles.measureItem}><span style={styles.mLabel}>Shoulders</span><span style={styles.mVal}>{measurements.shoulders || '—'}"</span></div>
+              <div style={styles.measureItem}><span style={styles.mLabel}>Chest</span><span style={styles.mVal}>{measurements.chest ? `${measurements.chest}"` : '—'}</span></div>
+              <div style={styles.measureItem}><span style={styles.mLabel}>Waist</span><span style={styles.mVal}>{measurements.waist ? `${measurements.waist}"` : '—'}</span></div>
+              <div style={styles.measureItem}><span style={styles.mLabel}>Hips</span><span style={styles.mVal}>{measurements.hips ? `${measurements.hips}"` : '—'}</span></div>
+              <div style={styles.measureItem}><span style={styles.mLabel}>Shoulders</span><span style={styles.mVal}>{measurements.shoulders ? `${measurements.shoulders}"` : '—'}</span></div>
               <div style={styles.measureItem}><span style={styles.mLabel}>Bicep (L/R)</span><span style={styles.mVal}>{measurements.bicepL || '—'} / {measurements.bicepR || '—'}"</span></div>
               <div style={styles.measureItem}><span style={styles.mLabel}>Thigh (L/R)</span><span style={styles.mVal}>{measurements.thighL || '—'} / {measurements.thighR || '—'}"</span></div>
             </div>
           </div>
 
-          {/* Health & Safety Matrix */}
+          {/* Health & Safety Dossier */}
           <div style={styles.sectionHeader}>HEALTH & SAFETY DOSSIER</div>
           <div style={styles.card}>
             <div style={styles.settingRow}>
               <span>Blood Group</span>
-              <span style={{ ...styles.settingValue, color: '#FF85A2' }}>{bloodGroup}</span>
+              <span style={{ ...styles.settingValue, color: '#FF85A2' }}>{bloodGroup !== 'Select' ? bloodGroup : '—'}</span>
             </div>
             <div style={styles.divider} />
             <div style={styles.settingRow}>
               <span>Cardiovascular</span>
-              <span style={styles.settingValue}>{restingHR} bpm · {bloodPressure} BP</span>
+              <span style={styles.settingValue}>
+                {restingHR ? `${restingHR} bpm` : '—'} · {bloodPressure ? `${bloodPressure} BP` : '—'}
+              </span>
             </div>
             <div style={styles.divider} />
             <div style={styles.settingRow}>
@@ -537,11 +570,13 @@ export default function Profile({ rankWeeks = null }) {
             <div style={styles.divider} />
             <div style={styles.settingRow}>
               <span>Body Water / Bone Score</span>
-              <span style={styles.settingValue}>{waterPct}% · {boneDensityScore}</span>
+              <span style={styles.settingValue}>
+                {waterPct ? `${waterPct}%` : '—'} · {boneDensityScore ? boneDensityScore : '—'}
+              </span>
             </div>
           </div>
 
-          {/* Training Preferences */}
+          {/* Training Protocol */}
           <div style={styles.sectionHeader}>TRAINING PROTOCOL</div>
           <div style={styles.card}>
             <div style={styles.settingRow}>

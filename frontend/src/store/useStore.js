@@ -10,47 +10,98 @@ import { MOBILE, nativeLoad, nativeSave, syncReminder } from '../lib/mobile.js'
 const KEY = 'gym_state_v1'
 
 export const INITIAL_BIO_SCAN = {
-  reportDate: '2026-08-27',
-  weight: 78.95,
-  height: `5'7"`,
-  age: 25,
-  gender: 'Male',
-  bmi: 27.3,
-  bmr: 1623,
-  metabolicAge: 31,
-  bodyFatPct: 25.0,
-  subcutaneousFatPct: 23.0,
-  visceralFatIndex: 9,
-  fatMass: 20.0,
-  leanMass: 59.0,
-  muscleMass: 41.9,
-  boneMass: 2.9,
-  proteinPct: 16.0,
+  reportDate: null,
+  weight: null,
+  height: '',
+  age: null,
+  gender: '',
+  bmi: null,
+  bmr: null,
+  metabolicAge: null,
+  bodyFatPct: null,
+  subcutaneousFatPct: null,
+  visceralFatIndex: null,
+  fatMass: null,
+  leanMass: null,
+  muscleMass: null,
+  boneMass: null,
+  proteinPct: null,
   scores: {
-    overall: 73,
-    bodyComposition: 80,
-    fatAnalysis: 60,
-    metabolicIndicators: 80
+    overall: null,
+    bodyComposition: null,
+    fatAnalysis: null,
+    metabolicIndicators: null
   },
   targets: {
-    idealWeight: 63.0,
-    weightControl: 16.0,
-    targetFatMass: 15.0,
-    targetBodyFat: 20.0,
-    targetMetabolicAge: 27
+    idealWeight: null,
+    weightControl: null,
+    targetFatMass: null,
+    targetBodyFat: null,
+    targetMetabolicAge: null
   }
 }
 
+export const INITIAL_PROFILE = {
+  name: '',
+  heightCm: '',
+  bio: '',
+  bloodGroup: 'Select',
+  restingHR: '',
+  bloodPressure: '',
+  injuries: 'None',
+  allergies: 'None',
+  somatotype: 'Mesomorph',
+  dominantHand: 'Right',
+  trainingDays: '4',
+  sessionDuration: '60',
+  equipment: 'Full Gym',
+  avoidExercises: '',
+  targetWeight: '',
+  targetBodyFat: '',
+  targetDate: '',
+  goal: 'Hypertrophy',
+  measurements: {
+    chest: '',
+    waist: '',
+    hips: '',
+    bicepL: '',
+    bicepR: '',
+    thighL: '',
+    thighR: '',
+    calfL: '',
+    calfR: '',
+    neck: '',
+    shoulders: ''
+  },
+  measurementsUpdatedAt: null,
+  waterPct: '',
+  boneDensityScore: '',
+  photos: { front: null, side: null, back: null, date: null }
+}
+
 export const DEF = {
-  unit: 'kg', restSec: 90, sound: true, keepAwake: true, lang: 'en',
-  theme: 'dark', accent: 'lime', body: 'male', targetW: 63.0,
-  bodyweight: [
-    { d: '2026-08-27', w: 78.95 }
-  ],
-  routines: [], week: {}, dayPlan: {},
-  exWeights: {}, workouts: [], active: null, customEx: [], gifSize: 'full',
-  reminder: { on: false, time: '08:00', tz: null }, effort: null,
-  bioScan: INITIAL_BIO_SCAN
+  unit: 'kg', 
+  restSec: 90, 
+  sound: true, 
+  keepAwake: true, 
+  lang: 'en',
+  theme: 'dark', 
+  accent: 'lime', 
+  body: 'male', 
+  targetW: null,
+  bodyweight: [],
+  routines: [], 
+  week: {}, 
+  dayPlan: {},
+  exWeights: {}, 
+  workouts: [], 
+  active: null, 
+  customEx: [], 
+  gifSize: 'full',
+  reminder: { on: false, time: '08:00', tz: null }, 
+  effort: null,
+  bioScan: INITIAL_BIO_SCAN,
+  profile: INITIAL_PROFILE
 }
 
 const clone = o => JSON.parse(JSON.stringify(o))
