@@ -15,12 +15,12 @@ export default function Login() {
 
   // Mechanism A: pick one card at random when the screen mounts.
   const [card] = useState(() => pickRandomCard())
-  const isImageCard = card.kind === 'image'
+  const isImageCard = card?.kind === 'image'
 
   // Preload every image card up front so switching feels instant.
   useEffect(() => {
-    WARRIOR_CARDS.forEach((c) => {
-      if (c.kind === 'image') {
+    WARRIOR_CARDS?.forEach((c) => {
+      if (c.kind === 'image' && c.src) {
         const img = new Image()
         img.src = c.src
       }
@@ -58,14 +58,14 @@ export default function Login() {
     )
   }
 
-  // Auth.jsx now owns the entire screen (background image, overlay, bottom sheet).
-  // Login.jsx's only job is deciding which warrior card to hand it.
+  // Auth.jsx owns the screen layout and receives separated badge + title props
   return (
     <Auth
       onLoginSuccess={onAuth}
       bgImage={isImageCard ? card.src : undefined}
-      accent={card.accent}
-      badge={isImageCard ? `⚔ WARRIOR PATH · ${card.title}` : undefined}
+      accent={card.accent || '#FBBF24'}
+      badge={card.kanji ? `WARRIOR PATH · ${card.kanji}` : 'WARRIOR PATH'}
+      title={card.title || 'THE WARRIOR'}
       mantra={card.mantra}
       onGuest={() => setGuest(true)}
       guestLabel={t('Continue without account')}
