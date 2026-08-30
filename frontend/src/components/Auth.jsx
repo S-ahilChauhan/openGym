@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '../supabase.js'
 
-export default function Auth({ onLoginSuccess }) {
+export default function Auth({ onLoginSuccess, bgImage, accent = '#7C8CF8', badge, mantra, onGuest, guestLabel = 'Continue without account' }) {
   const [isSignUp, setIsSignUp] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -41,8 +41,26 @@ export default function Auth({ onLoginSuccess }) {
   }
 
   return (
-    <div style={styles.container}>
+    <div
+      style={{
+        ...styles.container,
+        backgroundImage: bgImage ? `url('${bgImage}')` : 'none',
+        backgroundColor: bgImage ? undefined : '#0a0a0c',
+      }}
+    >
       <div style={styles.overlay} />
+
+      {/* Optional top badge + mantra, sits above the bottom sheet, doesn't affect its layout */}
+      {(badge || mantra) && (
+        <div style={styles.topHeader}>
+          {badge && (
+            <div style={{ ...styles.badgeText, color: accent }}>{badge}</div>
+          )}
+          <div style={styles.title}>openGym</div>
+          {mantra && <div style={styles.mantraText}>"{mantra}"</div>}
+        </div>
+      )}
+
       <form onSubmit={handleAuth} style={styles.formSection}>
         {errorMsg && <div style={styles.error}>{errorMsg}</div>}
 
@@ -65,13 +83,19 @@ export default function Auth({ onLoginSuccess }) {
 
         <div style={styles.bottomCard}>
           {!isSignUp && <button type="button" onClick={handleForgotPassword} style={styles.forgotBtn}>Forgot Password?</button>}
-          <button type="submit" disabled={loading} style={styles.loginBtn}>
+          <button type="submit" disabled={loading} style={{ ...styles.loginBtn, backgroundColor: '#262626' }}>
             {loading ? 'Processing...' : isSignUp ? 'Create an account' : 'Login'}
           </button>
           <div style={styles.divider}>or</div>
           <button type="button" onClick={() => { setIsSignUp(!isSignUp); setErrorMsg('') }} style={styles.createAccountBtn}>
             {isSignUp ? 'Already have an account? Login' : 'Create an account'}
           </button>
+
+          {onGuest && (
+            <button type="button" onClick={onGuest} style={styles.guestLink}>
+              {guestLabel}
+            </button>
+          )}
         </div>
       </form>
     </div>
@@ -81,11 +105,19 @@ export default function Auth({ onLoginSuccess }) {
 const styles = {
   container: {
     position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, width: '100vw', height: '100dvh',
-    backgroundImage: "url('/baki-bg.jpg.jpeg')", backgroundSize: 'cover', backgroundPosition: 'top center',
+    backgroundSize: 'cover', backgroundPosition: 'top center',
     backgroundRepeat: 'no-repeat', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
     zIndex: 9999, overflow: 'hidden', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
   },
   overlay: { position: 'absolute', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.35)', zIndex: 1 },
+  topHeader: {
+    position: 'absolute', top: 0, left: 0, right: 0, zIndex: 2,
+    display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center',
+    padding: '2.2rem 1.5rem 0',
+  },
+  badgeText: { fontSize: '0.68rem', fontWeight: 800, letterSpacing: '1.4px', textTransform: 'uppercase', marginBottom: '6px' },
+  title: { fontSize: '1.7rem', fontWeight: 900, letterSpacing: '-0.02em', color: '#fff', margin: '2px 0' },
+  mantraText: { fontSize: '0.78rem', color: '#ddd', fontStyle: 'italic', marginTop: '4px', maxWidth: '280px' },
   formSection: {
     position: 'relative', zIndex: 2, width: '100%', maxWidth: '430px', margin: '0 auto', display: 'flex', flexDirection: 'column',
     justifyContent: 'flex-end', alignItems: 'center', boxSizing: 'border-box'
@@ -104,8 +136,9 @@ const styles = {
     borderTopRightRadius: '36px', padding: '1.4rem 1.5rem 2rem', display: 'flex', flexDirection: 'column', alignItems: 'center', boxSizing: 'border-box', boxShadow: '0 -10px 40px rgba(0, 0, 0, 0.4)'
   },
   forgotBtn: { background: 'none', border: 'none', color: '#444', fontSize: '0.85rem', marginBottom: '1rem', cursor: 'pointer', fontWeight: '400' },
-  loginBtn: { width: '100%', padding: '0.95rem', backgroundColor: '#262626', color: '#fff', border: 'none', borderRadius: '35px', fontSize: '1rem', fontWeight: '500', cursor: 'pointer', boxShadow: '0 6px 18px rgba(0, 0, 0, 0.3)' },
+  loginBtn: { width: '100%', padding: '0.95rem', color: '#fff', border: 'none', borderRadius: '35px', fontSize: '1rem', fontWeight: '500', cursor: 'pointer', boxShadow: '0 6px 18px rgba(0, 0, 0, 0.3)' },
   divider: { margin: '0.65rem 0', color: '#888', fontSize: '0.82rem' },
   createAccountBtn: { width: '100%', padding: '0.95rem', backgroundColor: 'rgba(255, 255, 255, 0.95)', color: '#2a2a2a', border: '1px solid rgba(0, 0, 0, 0.08)', borderRadius: '35px', fontSize: '1rem', fontWeight: '500', cursor: 'pointer', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)' },
+  guestLink: { background: 'none', border: 'none', color: '#555', fontSize: '0.82rem', fontWeight: 600, marginTop: '1rem', cursor: 'pointer', textDecoration: 'underline' },
   error: { color: '#ff4d4f', backgroundColor: 'rgba(0, 0, 0, 0.65)', padding: '0.4rem 0.9rem', borderRadius: '16px', marginBottom: '0.75rem', fontSize: '0.82rem', textAlign: 'center' }
 }
