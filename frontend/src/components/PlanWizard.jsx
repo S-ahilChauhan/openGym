@@ -30,16 +30,6 @@ const FALLBACK_EX_CATALOG = [
   { id: '0605', n: 'Plank', bp: 'core', tg: 'core stabilizers' },
 ];
 
-const DEFAULT_MUSCLE_EXERCISES = {
-  chest: ['0001', '0005', '0007'],
-  back: ['0100', '0102', '0106'],
-  shoulders: ['0200', '0204'],
-  biceps: ['0300', '0305'],
-  triceps: ['0350', '0355'],
-  legs: ['0500', '0503', '0550', '0552'],
-  core: ['0602', '0605'],
-};
-
 const DAYS = [
   { id: 1, name: 'Monday' },
   { id: 2, name: 'Tuesday' },
@@ -59,8 +49,83 @@ const FREQUENCY_OPTIONS = [
   { days: 7, label: 'Every Day' },
 ];
 
-// Generates sensible default active days based on selected frequency
-function getDefaultWeekSplit(numDays) {
+const PROGRAM_STYLES = [
+  {
+    id: 'static',
+    name: 'Static / Fixed Split',
+    tag: '⚡ Standard',
+    desc: 'Same workouts every week indefinitely. Simple linear progression.',
+    weeks: ['A'],
+  },
+  {
+    id: 'ab_alternating',
+    name: 'A/B Alternating',
+    tag: '🔥 2-Week Cycle',
+    desc: 'Alternates Week A (Odd: 1, 3) and Week B (Even: 2, 4).',
+    weeks: ['A', 'B'],
+  },
+  {
+    id: 'abc_rotating',
+    name: 'A/B/C Rotating',
+    tag: '🔄 3-Week Cycle',
+    desc: 'Three rotating workout variations in sequence (A → B → C).',
+    weeks: ['A', 'B', 'C'],
+  },
+  {
+    id: 'wave_loading',
+    name: 'Wave Loading Block',
+    tag: '🌊 4-Week Block',
+    desc: 'Fixed lifts with intensity waving weekly (Heavy → Light → Peak → Deload).',
+    weeks: ['A'],
+  },
+  {
+    id: 'dup',
+    name: 'Daily Undulating (DUP)',
+    tag: '🎯 Intra-Week',
+    desc: 'Varying rep & intensity schemes per session (Hypertrophy / Power / Strength).',
+    weeks: ['A'],
+  },
+  {
+    id: 'bro_split',
+    name: 'Bodypart / Bro Split',
+    tag: '💪 1 Muscle / Day',
+    desc: 'Dedicated single muscle focus per session repeating weekly.',
+    weeks: ['A'],
+  },
+  {
+    id: 'conjugate',
+    name: 'Conjugate Method',
+    tag: '⚔️ Max Effort',
+    desc: 'Rotating max effort and dynamic effort variations every session.',
+    weeks: ['A', 'B'],
+  },
+];
+
+// Helper: Query EXDB dynamically by muscle group string
+function getExercisesForMuscles(muscles = []) {
+  const catalog = Array.isArray(EXDB) && EXDB.length > 0 ? EXDB : FALLBACK_EX_CATALOG;
+  if (!muscles || muscles.length === 0) return [];
+
+  const foundIds = [];
+  muscles.forEach((muscle) => {
+    const mLower = muscle.toLowerCase();
+    const matched = catalog.filter((x) => 
+      (x.bp && x.bp.toLowerCase().includes(mLower)) || 
+      (x.tg && x.tg.toLowerCase().includes(mLower))
+    );
+    // Take up to 2 key exercises per target muscle group
+    matched.slice(0, 2).forEach((ex) => {
+      if (!foundIds.includes(String(ex.id))) {
+        foundIds.push(String(ex.id));
+      }
+    });
+  });
+
+  return foundIds.length > 0 ? foundIds : ['0001', '0100'];
+}
+
+// Generate sensible default active day layouts
+function buildBlankWeek(numDays, weekVariant = 'A') {
   const blank = {
     1: { active: false, muscles: [], exercises: [] },
     2: { active: false, muscles: [], exercises: [] },
@@ -71,123 +136,161 @@ function getDefaultWeekSplit(numDays) {
     0: { active: false, muscles: [], exercises: [] },
   };
 
-  switch (numDays) {
-    case 2:
-      blank[1] = { active: true, muscles: ['chest', 'back'], exercises: ['0001', '0100'] };
-      blank[4] = { active: true, muscles: ['legs', 'shoulders'], exercises: ['0500', '0200'] };
-      break;
-    case 3:
-      blank[1] = { active: true, muscles: ['chest', 'triceps'], exercises: ['0001', '0005', '0350'] };
-      blank[3] = { active: true, muscles: ['back', 'biceps'], exercises: ['0100', '0102', '0300'] };
-      blank[5] = { active: true, muscles: ['legs', 'core'], exercises: ['0500', '0552', '0602'] };
-      break;
-    case 4:
-      blank[1] = { active: true, muscles: ['chest', 'back'], exercises: ['0001', '0100'] };
-      blank[2] = { active: true, muscles: ['legs', 'core'], exercises: ['0500', '0602'] };
-      blank[4] = { active: true, muscles: ['shoulders', 'arms'], exercises: ['0200', '0300', '0350'] };
-      blank[5] = { active: true, muscles: ['legs', 'core'], exercises: ['0503', '0550'] };
-      break;
-    case 6:
-      blank[1] = { active: true, muscles: ['chest', 'triceps'], exercises: ['0001', '0350'] };
-      blank[2] = { active: true, muscles: ['back', 'biceps'], exercises: ['0100', '0300'] };
-      blank[3] = { active: true, muscles: ['legs', 'core'], exercises: ['0500', '0602'] };
-      blank[4] = { active: true, muscles: ['chest', 'shoulders'], exercises: ['0005', '0200'] };
-      blank[5] = { active: true, muscles: ['back', 'arms'], exercises: ['0102', '0305'] };
-      blank[6] = { active: true, muscles: ['legs', 'core'], exercises: ['0503', '0605'] };
-      break;
-    case 7:
-      DAYS.forEach((d) => {
-        blank[d.id] = { active: true, muscles: ['chest', 'back'], exercises: ['0001', '0100'] };
-      });
-      break;
-    case 5:
-    default:
-      blank[1] = { active: true, muscles: ['chest', 'back'], exercises: ['0001', '0100'] };
-      blank[2] = { active: true, muscles: ['shoulders', 'triceps'], exercises: ['0200', '0350'] };
-      blank[3] = { active: true, muscles: ['legs', 'core'], exercises: ['0500', '0602'] };
-      blank[4] = { active: true, muscles: ['chest', 'biceps'], exercises: ['0005', '0300'] };
-      blank[5] = { active: true, muscles: ['back', 'legs'], exercises: ['0102', '0552'] };
-      break;
+  const assignDay = (dayId, muscles) => {
+    blank[dayId] = {
+      active: true,
+      muscles,
+      exercises: getExercisesForMuscles(muscles),
+    };
+  };
+
+  if (numDays === 2) {
+    if (weekVariant === 'B') {
+      assignDay(1, ['back', 'biceps']);
+      assignDay(4, ['chest', 'triceps']);
+    } else {
+      assignDay(1, ['chest', 'back']);
+      assignDay(4, ['legs', 'shoulders']);
+    }
+  } else if (numDays === 3) {
+    if (weekVariant === 'B') {
+      assignDay(1, ['chest', 'back']);
+      assignDay(3, ['shoulders', 'arms']);
+      assignDay(5, ['legs', 'core']);
+    } else if (weekVariant === 'C') {
+      assignDay(1, ['chest', 'shoulders']);
+      assignDay(3, ['back', 'legs']);
+      assignDay(5, ['arms', 'core']);
+    } else {
+      assignDay(1, ['chest', 'triceps']);
+      assignDay(3, ['back', 'biceps']);
+      assignDay(5, ['legs', 'core']);
+    }
+  } else if (numDays === 4) {
+    assignDay(1, ['chest', 'back']);
+    assignDay(2, ['legs', 'core']);
+    assignDay(4, ['shoulders', 'arms']);
+    assignDay(5, ['legs', 'core']);
+  } else if (numDays === 6) {
+    assignDay(1, ['chest', 'triceps']);
+    assignDay(2, ['back', 'biceps']);
+    assignDay(3, ['legs', 'core']);
+    assignDay(4, ['chest', 'shoulders']);
+    assignDay(5, ['back', 'arms']);
+    assignDay(6, ['legs', 'core']);
+  } else if (numDays === 7) {
+    DAYS.forEach((d) => assignDay(d.id, ['chest', 'back']));
+  } else {
+    // 5 Days Default
+    assignDay(1, ['chest', 'back']);
+    assignDay(2, ['shoulders', 'triceps']);
+    assignDay(3, ['legs', 'core']);
+    assignDay(4, ['chest', 'biceps']);
+    assignDay(5, ['back', 'legs']);
   }
+
   return blank;
 }
 
 export default function PlanWizard({ isOpen, onClose, onGenerate, badgeColor = '#34D399' }) {
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState(1); // 1: Frequency, 2: Program Style, 3: Active Days & Muscles, 4: Exercises & Volume
   const [targetDays, setTargetDays] = useState(3);
+  const [programStyle, setProgramStyle] = useState(PROGRAM_STYLES[1]); // Default to A/B Alternating
   const [activeTab, setActiveTab] = useState('A');
   const [openMuscleDropdown, setOpenMuscleDropdown] = useState(null);
   const [currentEditDay, setCurrentEditDay] = useState(1);
 
+  // Search & inline exercise picker drawer in Step 4
   const [showInlinePicker, setShowInlinePicker] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [muscleFilterChip, setMuscleFilterChip] = useState('ALL');
 
-  // Initialized dynamically to match 3 days by default
-  const [weekA, setWeekA] = useState(getDefaultWeekSplit(3));
-  const [weekB, setWeekB] = useState(getDefaultWeekSplit(3));
-
-  const [exConfigs, setExConfigs] = useState({
-    '0001': { sets: 3, reps: 10, weight: 0 },
-    '0005': { sets: 3, reps: 10, weight: 0 },
-    '0100': { sets: 3, reps: 10, weight: 0 },
-    '0102': { sets: 3, reps: 10, weight: 0 },
-    '0200': { sets: 3, reps: 10, weight: 0 },
-    '0300': { sets: 3, reps: 10, weight: 0 },
-    '0350': { sets: 3, reps: 10, weight: 0 },
-    '0500': { sets: 3, reps: 10, weight: 0 },
-    '0552': { sets: 3, reps: 10, weight: 0 },
-    '0602': { sets: 3, reps: 10, weight: 0 },
+  // Multi-week plan stores
+  const [weekPlans, setWeekPlans] = useState({
+    A: buildBlankWeek(3, 'A'),
+    B: buildBlankWeek(3, 'B'),
+    C: buildBlankWeek(3, 'C'),
   });
+
+  // Sets & Reps Volume tracking per exercise
+  const [exConfigs, setExConfigs] = useState({});
 
   if (!isOpen) return null;
 
-  const currentPlan = activeTab === 'A' ? weekA : weekB;
-  const setPlan = activeTab === 'A' ? setWeekA : setWeekB;
+  const availableWeekTabs = programStyle.weeks || ['A'];
+  const currentPlan = weekPlans[activeTab] || weekPlans['A'];
   const activeCount = Object.values(currentPlan).filter((d) => d.active).length;
 
-  // Handles choosing days in Step 1 and updating Step 2 accordingly
-  const handleSelectFrequency = (days) => {
-    setTargetDays(days);
-    const newSplitA = getDefaultWeekSplit(days);
-    const newSplitB = getDefaultWeekSplit(days);
-    setWeekA(newSplitA);
-    setWeekB(newSplitB);
+  const setPlan = (updater) => {
+    setWeekPlans((prev) => ({
+      ...prev,
+      [activeTab]: updater(prev[activeTab] || prev['A']),
+    }));
   };
 
-  const toggleDayActive = (dayId) => {
-    setPlan((prev) => {
-      const conf = prev[dayId] || { active: false, muscles: [], exercises: [] };
-      return { ...prev, [dayId]: { ...conf, active: !conf.active } };
+  // Step 1: Select Weekly Frequency
+  const handleSelectFrequency = (days) => {
+    setTargetDays(days);
+    setWeekPlans({
+      A: buildBlankWeek(days, 'A'),
+      B: buildBlankWeek(days, 'B'),
+      C: buildBlankWeek(days, 'C'),
     });
   };
 
-  const toggleMuscle = (dayId, muscleId) => {
-    setPlan((prev) => {
-      const conf = prev[dayId] || { active: true, muscles: [], exercises: [] };
-      const muscles = conf.muscles || [];
-      const exists = muscles.includes(muscleId);
-      const updatedMuscles = exists ? muscles.filter((m) => m !== muscleId) : [...muscles, muscleId];
+  // Step 2: Select Program Style
+  const handleSelectProgramStyle = (style) => {
+    setProgramStyle(style);
+    setActiveTab(style.weeks[0] || 'A');
+  };
 
-      let updatedEx = [...(conf.exercises || [])];
-      if (!exists && DEFAULT_MUSCLE_EXERCISES[muscleId]) {
-        DEFAULT_MUSCLE_EXERCISES[muscleId].forEach((id) => {
-          if (!updatedEx.includes(id)) {
-            updatedEx.push(id);
-            setExConfigs((prevCfg) => ({
-              ...prevCfg,
-              [id]: prevCfg[id] || { sets: 3, reps: 10, weight: 0 },
-            }));
-          }
-        });
-      }
+  // Step 3: Toggle Active / Rest
+  const toggleDayActive = (dayId) => {
+    setPlan((prev) => {
+      const conf = prev[dayId] || { active: false, muscles: [], exercises: [] };
+      const nextActive = !conf.active;
+      const initialMuscles = nextActive && conf.muscles.length === 0 ? ['chest', 'back'] : conf.muscles;
+      const initialEx = nextActive && (!conf.exercises || conf.exercises.length === 0) 
+        ? getExercisesForMuscles(initialMuscles) 
+        : conf.exercises;
 
       return {
         ...prev,
-        [dayId]: { ...conf, muscles: updatedMuscles, exercises: updatedEx },
+        [dayId]: {
+          ...conf,
+          active: nextActive,
+          muscles: initialMuscles,
+          exercises: initialEx,
+        },
       };
     });
   };
 
+  // Step 3: Toggle Target Muscle Group (Strictly updates dynamic exercises)
+  const toggleMuscle = (dayId, muscleId) => {
+    setPlan((prev) => {
+      const conf = prev[dayId] || { active: true, muscles: [], exercises: [] };
+      const currentMuscles = conf.muscles || [];
+      const exists = currentMuscles.includes(muscleId);
+      const updatedMuscles = exists 
+        ? currentMuscles.filter((m) => m !== muscleId) 
+        : [...currentMuscles, muscleId];
+
+      // Dynamically recalculate matched exercises
+      const dynamicEx = getExercisesForMuscles(updatedMuscles);
+
+      return {
+        ...prev,
+        [dayId]: {
+          ...conf,
+          muscles: updatedMuscles,
+          exercises: dynamicEx,
+        },
+      };
+    });
+  };
+
+  // Step 4: Add Exercise from Filtered Catalog
   const handleAddExerciseDirect = (dayId, exId) => {
     setPlan((prev) => {
       const conf = prev[dayId] || { active: true, muscles: [], exercises: [] };
@@ -204,6 +307,7 @@ export default function PlanWizard({ isOpen, onClose, onGenerate, badgeColor = '
     }));
   };
 
+  // Step 4: Remove Exercise
   const handleRemoveExercise = (dayId, exId) => {
     setPlan((prev) => {
       const conf = prev[dayId] || { active: true, muscles: [], exercises: [] };
@@ -217,6 +321,7 @@ export default function PlanWizard({ isOpen, onClose, onGenerate, badgeColor = '
     });
   };
 
+  // Step 4: Update Sets or Reps with Steppers
   const updateSetOrRep = (exId, field, delta) => {
     setExConfigs((prev) => {
       const cur = prev[exId] || { sets: 3, reps: 10, weight: 0 };
@@ -228,32 +333,41 @@ export default function PlanWizard({ isOpen, onClose, onGenerate, badgeColor = '
     });
   };
 
+  // Generate and commit all periodized routines directly
   const handleGenerateRoutines = () => {
-    const activeDays = DAYS.filter((d) => currentPlan[d.id]?.active);
     const generatedRoutines = [];
     const updatedWeek = { 0: null, 1: null, 2: null, 3: null, 4: null, 5: null, 6: null };
     const updatedCfg = { ...exConfigs };
 
-    activeDays.forEach((d) => {
-      const conf = currentPlan[d.id];
-      const rId = 'r_' + d.id + '_' + Date.now();
-      const muscleTitle = (conf.muscles || []).map((m) => m.charAt(0).toUpperCase() + m.slice(1)).join(' & ') || 'Workout';
-      const exList = conf.exercises?.length ? conf.exercises : ['0001', '0100', '0500'];
+    availableWeekTabs.forEach((wKey) => {
+      const weekData = weekPlans[wKey] || {};
+      const activeDays = DAYS.filter((d) => weekData[d.id]?.active);
 
-      generatedRoutines.push({
-        id: rId,
-        name: `${d.name} (${muscleTitle})`,
-        emoji: '⚡',
-        ex: exList,
-      });
+      activeDays.forEach((d) => {
+        const conf = weekData[d.id];
+        const rId = `r_${wKey}_${d.id}_${Date.now()}`;
+        const muscleTitle = (conf.muscles || []).map((m) => m.charAt(0).toUpperCase() + m.slice(1)).join(' & ') || 'Workout';
+        const exList = conf.exercises?.length ? conf.exercises : ['0001', '0100'];
 
-      exList.forEach((exId) => {
-        if (!updatedCfg[exId]) {
-          updatedCfg[exId] = { sets: 3, reps: 10, weight: 0 };
+        const weekLabel = availableWeekTabs.length > 1 ? `[W-${wKey}] ` : '';
+        generatedRoutines.push({
+          id: rId,
+          name: `${weekLabel}${d.name} (${muscleTitle})`,
+          emoji: '⚡',
+          ex: exList,
+        });
+
+        exList.forEach((exId) => {
+          if (!updatedCfg[exId]) {
+            updatedCfg[exId] = { sets: 3, reps: 10, weight: 0 };
+          }
+        });
+
+        // Set primary week mapping for initial display
+        if (wKey === 'A') {
+          updatedWeek[d.id] = rId;
         }
       });
-
-      updatedWeek[d.id] = rId;
     });
 
     if (typeof onGenerate === 'function') {
@@ -267,15 +381,26 @@ export default function PlanWizard({ isOpen, onClose, onGenerate, badgeColor = '
     onClose();
   };
 
+  // Catalog resolution for Step 4
   const fullCatalog = Array.isArray(EXDB) && EXDB.length > 0 ? EXDB : FALLBACK_EX_CATALOG;
   const currentDayMuscles = currentPlan[currentEditDay]?.muscles || [];
   const currentDayExercises = currentPlan[currentEditDay]?.exercises || [];
 
+  // Strictly filter inline picker by current day's assigned muscles
   const filteredCatalog = fullCatalog.filter((x) => {
     const matchesSearch = !searchQuery || (x.n && x.n.toLowerCase().includes(searchQuery.toLowerCase()));
     if (!matchesSearch) return false;
-    if (!searchQuery && currentDayMuscles.length > 0) {
-      return currentDayMuscles.some((m) => (x.bp && x.bp.toLowerCase().includes(m)) || (x.tg && x.tg.toLowerCase().includes(m)));
+
+    if (muscleFilterChip !== 'ALL') {
+      const chipLower = muscleFilterChip.toLowerCase();
+      return (x.bp && x.bp.toLowerCase().includes(chipLower)) || (x.tg && x.tg.toLowerCase().includes(chipLower));
+    }
+
+    if (currentDayMuscles.length > 0) {
+      return currentDayMuscles.some((m) => 
+        (x.bp && x.bp.toLowerCase().includes(m.toLowerCase())) || 
+        (x.tg && x.tg.toLowerCase().includes(m.toLowerCase()))
+      );
     }
     return true;
   });
@@ -283,26 +408,27 @@ export default function PlanWizard({ isOpen, onClose, onGenerate, badgeColor = '
   return (
     <div style={wizardStyles.backdrop} onClick={onClose}>
       <div style={wizardStyles.card} onClick={(e) => e.stopPropagation()}>
-        {/* Top Header */}
+        {/* Modal Top Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
           <div>
             <span style={{ fontSize: '0.72rem', fontWeight: '800', color: badgeColor, letterSpacing: '1px' }}>
-              STEP {step} OF 3
+              STEP {step} OF 4
             </span>
             <h2 style={{ fontSize: '1.45rem', fontWeight: '800', margin: '3px 0 0', color: '#fff' }}>
               {step === 1 && 'Weekly Training Frequency'}
-              {step === 2 && 'Custom Weekly Split'}
-              {step === 3 && 'Review & Select Exercises'}
+              {step === 2 && 'Program & Periodization Style'}
+              {step === 3 && 'Assign Muscles to Training Days'}
+              {step === 4 && 'Review & Select Exercises'}
             </h2>
           </div>
           <button type="button" onClick={onClose} style={wizardStyles.closeBtn}>✕</button>
         </div>
 
-        {/* ================= STEP 1: Frequency ================= */}
+        {/* ================= STEP 1: Frequency Selection ================= */}
         {step === 1 && (
           <div>
             <p style={wizardStyles.stepDescription}>
-              How many days per week do you want to work out? You can choose any days as rest days on the next step.
+              How many days per week do you want to work out? You can choose any specific rest days on the next steps.
             </p>
 
             <div style={wizardStyles.frequencyGrid}>
@@ -319,24 +445,10 @@ export default function PlanWizard({ isOpen, onClose, onGenerate, badgeColor = '
                       backgroundColor: isSelected ? 'rgba(52, 211, 153, 0.08)' : 'rgba(255, 255, 255, 0.03)',
                     }}
                   >
-                    <div
-                      style={{
-                        fontSize: '2rem',
-                        fontWeight: '800',
-                        color: isSelected ? badgeColor : '#fff',
-                        lineHeight: 1.1,
-                      }}
-                    >
+                    <div style={{ fontSize: '2rem', fontWeight: '800', color: isSelected ? badgeColor : '#fff', lineHeight: 1.1 }}>
                       {opt.days}
                     </div>
-                    <div
-                      style={{
-                        fontSize: '0.78rem',
-                        fontWeight: '700',
-                        color: isSelected ? '#fff' : '#888',
-                        marginTop: '6px',
-                      }}
-                    >
+                    <div style={{ fontSize: '0.78rem', fontWeight: '700', color: isSelected ? '#fff' : '#888', marginTop: '6px' }}>
                       {opt.label}
                     </div>
                   </button>
@@ -345,12 +457,60 @@ export default function PlanWizard({ isOpen, onClose, onGenerate, badgeColor = '
             </div>
 
             <div style={{ display: 'flex', gap: '12px', marginTop: '1.6rem' }}>
-              <button type="button" onClick={onClose} style={wizardStyles.cancelBtn}>
-                Cancel
-              </button>
+              <button type="button" onClick={onClose} style={wizardStyles.cancelBtn}>Cancel</button>
               <button
                 type="button"
                 onClick={() => setStep(2)}
+                style={{ ...wizardStyles.nextBtn, backgroundColor: badgeColor }}
+              >
+                Next: Program Style ➔
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ================= STEP 2: Program Style / Periodization ================= */}
+        {step === 2 && (
+          <div>
+            <p style={wizardStyles.stepDescription}>
+              Choose how your workouts rotate or progress across weeks:
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '340px', overflowY: 'auto', paddingRight: '2px' }}>
+              {PROGRAM_STYLES.map((style) => {
+                const isSelected = programStyle.id === style.id;
+                return (
+                  <div
+                    key={style.id}
+                    onClick={() => handleSelectProgramStyle(style)}
+                    style={{
+                      ...wizardStyles.styleCard,
+                      borderColor: isSelected ? badgeColor : 'rgba(255, 255, 255, 0.08)',
+                      backgroundColor: isSelected ? 'rgba(52, 211, 153, 0.08)' : 'rgba(255, 255, 255, 0.03)',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ ...wizardStyles.styleTag, color: badgeColor }}>{style.tag}</span>
+                      <span style={{ fontSize: '0.7rem', color: isSelected ? badgeColor : '#666', fontWeight: '800' }}>
+                        {isSelected ? '✓ SELECTED' : ''}
+                      </span>
+                    </div>
+                    <div style={{ fontWeight: '800', fontSize: '0.94rem', color: '#fff', marginTop: '4px' }}>
+                      {style.name}
+                    </div>
+                    <div style={{ fontSize: '0.72rem', color: '#888', marginTop: '2px', lineHeight: 1.3 }}>
+                      {style.desc}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px', marginTop: '1.2rem' }}>
+              <button type="button" onClick={() => setStep(1)} style={wizardStyles.cancelBtn}>← Back</button>
+              <button
+                type="button"
+                onClick={() => setStep(3)}
                 style={{ ...wizardStyles.nextBtn, backgroundColor: badgeColor }}
               >
                 Next: Configure Split ➔
@@ -359,44 +519,41 @@ export default function PlanWizard({ isOpen, onClose, onGenerate, badgeColor = '
           </div>
         )}
 
-        {/* ================= STEP 2: Custom Split ================= */}
-        {step === 2 && (
+        {/* ================= STEP 3: Assign Muscles to Days ================= */}
+        {step === 3 && (
           <div>
-            <div style={wizardStyles.periodizationTabs}>
-              <button
-                type="button"
-                onClick={() => { setActiveTab('A'); setOpenMuscleDropdown(null); }}
-                style={{
-                  ...wizardStyles.tabBtn,
-                  backgroundColor: activeTab === 'A' ? badgeColor : 'transparent',
-                  color: activeTab === 'A' ? '#000' : '#888',
-                }}
-              >
-                Week A (Odd Weeks: 1, 3)
-              </button>
-              <button
-                type="button"
-                onClick={() => { setActiveTab('B'); setOpenMuscleDropdown(null); }}
-                style={{
-                  ...wizardStyles.tabBtn,
-                  backgroundColor: activeTab === 'B' ? badgeColor : 'transparent',
-                  color: activeTab === 'B' ? '#000' : '#888',
-                }}
-              >
-                Week B (Even Weeks: 2, 4)
-              </button>
-            </div>
+            {/* Periodization Tabs (Week A / Week B / Week C) */}
+            {availableWeekTabs.length > 1 && (
+              <div style={wizardStyles.periodizationTabs}>
+                {availableWeekTabs.map((wKey) => (
+                  <button
+                    key={wKey}
+                    type="button"
+                    onClick={() => { setActiveTab(wKey); setOpenMuscleDropdown(null); }}
+                    style={{
+                      ...wizardStyles.tabBtn,
+                      backgroundColor: activeTab === wKey ? badgeColor : 'transparent',
+                      color: activeTab === wKey ? '#000' : '#888',
+                    }}
+                  >
+                    Week {wKey} {wKey === 'A' ? '(Odd: 1, 3)' : wKey === 'B' ? '(Even: 2, 4)' : '(Week 3)'}
+                  </button>
+                ))}
+              </div>
+            )}
 
+            {/* Target & Active Status Bar */}
             <div style={wizardStyles.statusBar}>
               <span style={{ color: '#888', fontSize: '0.78rem', fontWeight: '700' }}>
                 Target: {targetDays} Training Days
               </span>
               <span style={{ color: badgeColor, fontSize: '0.78rem', fontWeight: '800' }}>
-                {activeCount} Active Days Selected
+                {activeCount} Active Days in Week {activeTab}
               </span>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '320px', overflowY: 'auto', paddingRight: '2px' }}>
+            {/* Days Split List */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '310px', overflowY: 'auto', paddingRight: '2px' }}>
               {DAYS.map((d) => {
                 const conf = currentPlan[d.id] || { active: false, muscles: [] };
                 const isOpen = openMuscleDropdown === d.id;
@@ -445,15 +602,13 @@ export default function PlanWizard({ isOpen, onClose, onGenerate, badgeColor = '
                           <span style={{ color: '#888', fontSize: '0.65rem' }}>▼</span>
                         </div>
                       ) : (
-                        <div
-                          onClick={() => toggleDayActive(d.id)}
-                          style={wizardStyles.restPlaceholderBox}
-                        >
+                        <div onClick={() => toggleDayActive(d.id)} style={wizardStyles.restPlaceholderBox}>
                           Rest Day ☕ <span style={{ fontSize: '0.7rem', color: '#555' }}>(Tap to activate)</span>
                         </div>
                       )}
                     </div>
 
+                    {/* Muscle Groups Selection Dropdown */}
                     {isOpen && conf.active && (
                       <div style={wizardStyles.muscleDropdownGrid}>
                         {MAJOR_MUSCLE_GROUPS.map((mg) => {
@@ -482,15 +637,13 @@ export default function PlanWizard({ isOpen, onClose, onGenerate, badgeColor = '
             </div>
 
             <div style={{ display: 'flex', gap: '10px', marginTop: '1.2rem' }}>
-              <button type="button" onClick={() => setStep(1)} style={wizardStyles.cancelBtn}>
-                ← Back
-              </button>
+              <button type="button" onClick={() => setStep(2)} style={wizardStyles.cancelBtn}>← Back</button>
               <button
                 type="button"
                 onClick={() => {
                   const firstActive = DAYS.find((d) => currentPlan[d.id]?.active);
                   if (firstActive) setCurrentEditDay(firstActive.id);
-                  setStep(3);
+                  setStep(4);
                 }}
                 style={{ ...wizardStyles.nextBtn, backgroundColor: badgeColor }}
               >
@@ -500,14 +653,37 @@ export default function PlanWizard({ isOpen, onClose, onGenerate, badgeColor = '
           </div>
         )}
 
-        {/* ================= STEP 3: Sets & Reps Column Headers ================= */}
-        {step === 3 && (
+        {/* ================= STEP 4: Review Exercises with Week & Muscle Filter ================= */}
+        {step === 4 && (
           <div>
-            <p style={{ color: '#888', fontSize: '0.82rem', marginBottom: '0.8rem' }}>
-              Review exercises and customize target sets/reps for each workout:
-            </p>
+            {/* Week Selector in Step 4 */}
+            {availableWeekTabs.length > 1 && (
+              <div style={{ ...wizardStyles.periodizationTabs, marginBottom: '0.6rem' }}>
+                {availableWeekTabs.map((wKey) => (
+                  <button
+                    key={wKey}
+                    type="button"
+                    onClick={() => {
+                      setActiveTab(wKey);
+                      setShowInlinePicker(false);
+                      setSearchQuery('');
+                      const firstActive = DAYS.find((d) => (weekPlans[wKey] || {})[d.id]?.active);
+                      if (firstActive) setCurrentEditDay(firstActive.id);
+                    }}
+                    style={{
+                      ...wizardStyles.tabBtn,
+                      backgroundColor: activeTab === wKey ? badgeColor : 'transparent',
+                      color: activeTab === wKey ? '#000' : '#888',
+                    }}
+                  >
+                    Week {wKey}
+                  </button>
+                ))}
+              </div>
+            )}
 
-            <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '6px', marginBottom: '10px' }}>
+            {/* Day Selector Tabs */}
+            <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '6px', marginBottom: '8px' }}>
               {DAYS.filter((d) => currentPlan[d.id]?.active).map((d) => (
                 <button
                   key={d.id}
@@ -516,6 +692,7 @@ export default function PlanWizard({ isOpen, onClose, onGenerate, badgeColor = '
                     setCurrentEditDay(d.id);
                     setShowInlinePicker(false);
                     setSearchQuery('');
+                    setMuscleFilterChip('ALL');
                   }}
                   style={{
                     ...wizardStyles.dayTabBtn,
@@ -528,7 +705,7 @@ export default function PlanWizard({ isOpen, onClose, onGenerate, badgeColor = '
               ))}
             </div>
 
-            {/* Column Headers */}
+            {/* Column Header Titles */}
             <div style={wizardStyles.tableColumnHeader}>
               <span style={{ flex: 1 }}>EXERCISE</span>
               <span style={{ width: '68px', textAlign: 'center' }}>SETS</span>
@@ -536,7 +713,8 @@ export default function PlanWizard({ isOpen, onClose, onGenerate, badgeColor = '
               <span style={{ width: '22px' }} />
             </div>
 
-            <div style={{ maxHeight: showInlinePicker ? '140px' : '230px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            {/* Selected Exercises with Sets & Reps Steppers */}
+            <div style={{ maxHeight: showInlinePicker ? '125px' : '210px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
               {currentDayExercises.map((exId) => {
                 const ex = (typeof exOr === 'function' ? exOr(exId) : null) || { id: exId, n: `Exercise #${exId}`, bp: 'General' };
                 const cfg = exConfigs[exId] || { sets: 3, reps: 10 };
@@ -577,24 +755,56 @@ export default function PlanWizard({ isOpen, onClose, onGenerate, badgeColor = '
               })}
             </div>
 
+            {/* Inline Exercise Selection Drawer Filtered by Target Muscle Groups */}
             {showInlinePicker ? (
               <div style={wizardStyles.inlinePickerCard}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                  <span style={{ fontSize: '0.75rem', fontWeight: '800', color: badgeColor }}>
-                    ⚡ SELECT EXERCISE
+                  <span style={{ fontSize: '0.72rem', fontWeight: '800', color: badgeColor }}>
+                    ⚡ FILTERED EXERCISES ({currentDayMuscles.join(', ') || 'All'})
                   </span>
                   <button
                     type="button"
                     onClick={() => setShowInlinePicker(false)}
-                    style={{ background: 'none', border: 'none', color: '#888', fontSize: '0.8rem', cursor: 'pointer' }}
+                    style={{ background: 'none', border: 'none', color: '#888', fontSize: '0.78rem', cursor: 'pointer' }}
                   >
                     Close
                   </button>
                 </div>
 
+                {/* Muscle Filter Chips */}
+                {currentDayMuscles.length > 1 && (
+                  <div style={{ display: 'flex', gap: '4px', marginBottom: '6px', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      onClick={() => setMuscleFilterChip('ALL')}
+                      style={{
+                        ...wizardStyles.chipBtn,
+                        backgroundColor: muscleFilterChip === 'ALL' ? badgeColor : 'rgba(255,255,255,0.06)',
+                        color: muscleFilterChip === 'ALL' ? '#000' : '#aaa',
+                      }}
+                    >
+                      All ({currentDayMuscles.length})
+                    </button>
+                    {currentDayMuscles.map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setMuscleFilterChip(m)}
+                        style={{
+                          ...wizardStyles.chipBtn,
+                          backgroundColor: muscleFilterChip === m ? badgeColor : 'rgba(255,255,255,0.06)',
+                          color: muscleFilterChip === m ? '#000' : '#aaa',
+                        }}
+                      >
+                        {m}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
                 <input
                   type="text"
-                  placeholder="Search exercise..."
+                  placeholder="Search inside assigned muscles..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   style={wizardStyles.searchInput}
@@ -642,9 +852,7 @@ export default function PlanWizard({ isOpen, onClose, onGenerate, badgeColor = '
             )}
 
             <div style={{ display: 'flex', gap: '10px', marginTop: '1.2rem' }}>
-              <button type="button" onClick={() => setStep(2)} style={wizardStyles.cancelBtn}>
-                ← Back
-              </button>
+              <button type="button" onClick={() => setStep(3)} style={wizardStyles.cancelBtn}>← Back</button>
               <button
                 type="button"
                 onClick={handleGenerateRoutines}
@@ -679,7 +887,7 @@ const wizardStyles = {
     backgroundColor: '#121218',
     border: '1px solid rgba(255, 255, 255, 0.12)',
     borderRadius: '26px',
-    padding: '1.5rem',
+    padding: '1.4rem',
     boxShadow: '0 24px 60px rgba(0, 0, 0, 0.85)',
   },
   closeBtn: {
@@ -693,7 +901,7 @@ const wizardStyles = {
     color: '#999',
     fontSize: '0.85rem',
     lineHeight: 1.4,
-    marginBottom: '1.3rem',
+    marginBottom: '1.1rem',
   },
   frequencyGrid: {
     display: 'grid',
@@ -710,6 +918,19 @@ const wizardStyles = {
     border: '1px solid',
     cursor: 'pointer',
     transition: 'all 0.15s ease',
+  },
+  styleCard: {
+    padding: '0.75rem 0.9rem',
+    borderRadius: '14px',
+    border: '1px solid',
+    cursor: 'pointer',
+  },
+  styleTag: {
+    fontSize: '0.65rem',
+    fontWeight: '800',
+    backgroundColor: 'rgba(52, 211, 153, 0.12)',
+    padding: '2px 6px',
+    borderRadius: '6px',
   },
   cancelBtn: {
     flex: 1,
@@ -913,6 +1134,15 @@ const wizardStyles = {
     backgroundColor: 'rgba(0, 0, 0, 0.4)',
     borderRadius: '14px',
     border: '1px solid rgba(255, 255, 255, 0.08)',
+  },
+  chipBtn: {
+    padding: '3px 8px',
+    borderRadius: '6px',
+    border: 'none',
+    fontSize: '0.68rem',
+    fontWeight: '700',
+    cursor: 'pointer',
+    textTransform: 'capitalize',
   },
   searchInput: {
     width: '100%',
