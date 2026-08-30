@@ -49,6 +49,8 @@ const FREQUENCY_OPTIONS = [
   { days: 7, label: 'Every Day' },
 ];
 
+const DURATION_OPTIONS = [4, 6, 8, 12, 16];
+
 const PROGRAM_STYLES = [
   {
     id: 'static',
@@ -101,7 +103,6 @@ const PROGRAM_STYLES = [
   },
 ];
 
-// Helper: Query EXDB dynamically by muscle group string
 function getExercisesForMuscles(muscles = []) {
   const catalog = Array.isArray(EXDB) && EXDB.length > 0 ? EXDB : FALLBACK_EX_CATALOG;
   if (!muscles || muscles.length === 0) return [];
@@ -113,7 +114,6 @@ function getExercisesForMuscles(muscles = []) {
       (x.bp && x.bp.toLowerCase().includes(mLower)) || 
       (x.tg && x.tg.toLowerCase().includes(mLower))
     );
-    // Take up to 2 key exercises per target muscle group
     matched.slice(0, 2).forEach((ex) => {
       if (!foundIds.includes(String(ex.id))) {
         foundIds.push(String(ex.id));
@@ -124,7 +124,6 @@ function getExercisesForMuscles(muscles = []) {
   return foundIds.length > 0 ? foundIds : ['0001', '0100'];
 }
 
-// Generate sensible default active day layouts
 function buildBlankWeek(numDays, weekVariant = 'A') {
   const blank = {
     1: { active: false, muscles: [], exercises: [] },
@@ -181,7 +180,6 @@ function buildBlankWeek(numDays, weekVariant = 'A') {
   } else if (numDays === 7) {
     DAYS.forEach((d) => assignDay(d.id, ['chest', 'back']));
   } else {
-    // 5 Days Default
     assignDay(1, ['chest', 'back']);
     assignDay(2, ['shoulders', 'triceps']);
     assignDay(3, ['legs', 'core']);
@@ -193,26 +191,25 @@ function buildBlankWeek(numDays, weekVariant = 'A') {
 }
 
 export default function PlanWizard({ isOpen, onClose, onGenerate, badgeColor = '#34D399' }) {
-  const [step, setStep] = useState(1); // 1: Frequency, 2: Program Style, 3: Active Days & Muscles, 4: Exercises & Volume
+  const [step, setStep] = useState(1);
   const [targetDays, setTargetDays] = useState(3);
-  const [programStyle, setProgramStyle] = useState(PROGRAM_STYLES[1]); // Default to A/B Alternating
+  const [durationWeeks, setDurationWeeks] = useState(8);
+  const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
+  const [programStyle, setProgramStyle] = useState(PROGRAM_STYLES[1]);
   const [activeTab, setActiveTab] = useState('A');
   const [openMuscleDropdown, setOpenMuscleDropdown] = useState(null);
   const [currentEditDay, setCurrentEditDay] = useState(1);
 
-  // Search & inline exercise picker drawer in Step 4
   const [showInlinePicker, setShowInlinePicker] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [muscleFilterChip, setMuscleFilterChip] = useState('ALL');
 
-  // Multi-week plan stores
   const [weekPlans, setWeekPlans] = useState({
     A: buildBlankWeek(3, 'A'),
     B: buildBlankWeek(3, 'B'),
     C: buildBlankWeek(3, 'C'),
   });
 
-  // Sets & Reps Volume tracking per exercise
   const [exConfigs, setExConfigs] = useState({});
 
   if (!isOpen) return null;
@@ -228,7 +225,6 @@ export default function PlanWizard({ isOpen, onClose, onGenerate, badgeColor = '
     }));
   };
 
-  // Step 1: Select Weekly Frequency
   const handleSelectFrequency = (days) => {
     setTargetDays(days);
     setWeekPlans({
@@ -238,13 +234,11 @@ export default function PlanWizard({ isOpen, onClose, onGenerate, badgeColor = '
     });
   };
 
-  // Step 2: Select Program Style
   const handleSelectProgramStyle = (style) => {
     setProgramStyle(style);
     setActiveTab(style.weeks[0] || 'A');
   };
 
-  // Step 3: Toggle Active / Rest
   const toggleDayActive = (dayId) => {
     setPlan((prev) => {
       const conf = prev[dayId] || { active: false, muscles: [], exercises: [] };
@@ -266,7 +260,6 @@ export default function PlanWizard({ isOpen, onClose, onGenerate, badgeColor = '
     });
   };
 
-  // Step 3: Toggle Target Muscle Group (Strictly updates dynamic exercises)
   const toggleMuscle = (dayId, muscleId) => {
     setPlan((prev) => {
       const conf = prev[dayId] || { active: true, muscles: [], exercises: [] };
@@ -276,7 +269,6 @@ export default function PlanWizard({ isOpen, onClose, onGenerate, badgeColor = '
         ? currentMuscles.filter((m) => m !== muscleId) 
         : [...currentMuscles, muscleId];
 
-      // Dynamically recalculate matched exercises
       const dynamicEx = getExercisesForMuscles(updatedMuscles);
 
       return {
@@ -290,7 +282,6 @@ export default function PlanWizard({ isOpen, onClose, onGenerate, badgeColor = '
     });
   };
 
-  // Step 4: Add Exercise from Filtered Catalog
   const handleAddExerciseDirect = (dayId, exId) => {
     setPlan((prev) => {
       const conf = prev[dayId] || { active: true, muscles: [], exercises: [] };
@@ -307,7 +298,6 @@ export default function PlanWizard({ isOpen, onClose, onGenerate, badgeColor = '
     }));
   };
 
-  // Step 4: Remove Exercise
   const handleRemoveExercise = (dayId, exId) => {
     setPlan((prev) => {
       const conf = prev[dayId] || { active: true, muscles: [], exercises: [] };
@@ -321,7 +311,6 @@ export default function PlanWizard({ isOpen, onClose, onGenerate, badgeColor = '
     });
   };
 
-  // Step 4: Update Sets or Reps with Steppers
   const updateSetOrRep = (exId, field, delta) => {
     setExConfigs((prev) => {
       const cur = prev[exId] || { sets: 3, reps: 10, weight: 0 };
@@ -333,7 +322,6 @@ export default function PlanWizard({ isOpen, onClose, onGenerate, badgeColor = '
     });
   };
 
-  // Generate and commit all periodized routines directly
   const handleGenerateRoutines = () => {
     const generatedRoutines = [];
     const updatedWeek = { 0: null, 1: null, 2: null, 3: null, 4: null, 5: null, 6: null };
@@ -363,7 +351,6 @@ export default function PlanWizard({ isOpen, onClose, onGenerate, badgeColor = '
           }
         });
 
-        // Set primary week mapping for initial display
         if (wKey === 'A') {
           updatedWeek[d.id] = rId;
         }
@@ -376,17 +363,18 @@ export default function PlanWizard({ isOpen, onClose, onGenerate, badgeColor = '
         newCustomExercises: [],
         updatedWeek,
         updatedCfg,
+        startDate,
+        durationWeeks,
+        programStyle: programStyle.id,
       });
     }
     onClose();
   };
 
-  // Catalog resolution for Step 4
   const fullCatalog = Array.isArray(EXDB) && EXDB.length > 0 ? EXDB : FALLBACK_EX_CATALOG;
   const currentDayMuscles = currentPlan[currentEditDay]?.muscles || [];
   const currentDayExercises = currentPlan[currentEditDay]?.exercises || [];
 
-  // Strictly filter inline picker by current day's assigned muscles
   const filteredCatalog = fullCatalog.filter((x) => {
     const matchesSearch = !searchQuery || (x.n && x.n.toLowerCase().includes(searchQuery.toLowerCase()));
     if (!matchesSearch) return false;
@@ -408,27 +396,26 @@ export default function PlanWizard({ isOpen, onClose, onGenerate, badgeColor = '
   return (
     <div style={wizardStyles.backdrop} onClick={onClose}>
       <div style={wizardStyles.card} onClick={(e) => e.stopPropagation()}>
-        {/* Modal Top Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
           <div>
             <span style={{ fontSize: '0.72rem', fontWeight: '800', color: badgeColor, letterSpacing: '1px' }}>
               STEP {step} OF 4
             </span>
             <h2 style={{ fontSize: '1.45rem', fontWeight: '800', margin: '3px 0 0', color: '#fff' }}>
-              {step === 1 && 'Weekly Training Frequency'}
-              {step === 2 && 'Program & Periodization Style'}
-              {step === 3 && 'Assign Muscles to Training Days'}
+              {step === 1 && 'Frequency & Duration'}
+              {step === 2 && 'Program & Periodization'}
+              {step === 3 && 'Assign Muscles to Days'}
               {step === 4 && 'Review & Select Exercises'}
             </h2>
           </div>
           <button type="button" onClick={onClose} style={wizardStyles.closeBtn}>✕</button>
         </div>
 
-        {/* ================= STEP 1: Frequency Selection ================= */}
+        {/* STEP 1: Frequency, Duration, & Start Date */}
         {step === 1 && (
           <div>
             <p style={wizardStyles.stepDescription}>
-              How many days per week do you want to work out? You can choose any specific rest days on the next steps.
+              Configure how often and for how long you plan to run this training block:
             </p>
 
             <div style={wizardStyles.frequencyGrid}>
@@ -445,10 +432,10 @@ export default function PlanWizard({ isOpen, onClose, onGenerate, badgeColor = '
                       backgroundColor: isSelected ? 'rgba(52, 211, 153, 0.08)' : 'rgba(255, 255, 255, 0.03)',
                     }}
                   >
-                    <div style={{ fontSize: '2rem', fontWeight: '800', color: isSelected ? badgeColor : '#fff', lineHeight: 1.1 }}>
+                    <div style={{ fontSize: '1.8rem', fontWeight: '800', color: isSelected ? badgeColor : '#fff', lineHeight: 1.1 }}>
                       {opt.days}
                     </div>
-                    <div style={{ fontSize: '0.78rem', fontWeight: '700', color: isSelected ? '#fff' : '#888', marginTop: '6px' }}>
+                    <div style={{ fontSize: '0.75rem', fontWeight: '700', color: isSelected ? '#fff' : '#888', marginTop: '4px' }}>
                       {opt.label}
                     </div>
                   </button>
@@ -456,7 +443,64 @@ export default function PlanWizard({ isOpen, onClose, onGenerate, badgeColor = '
               })}
             </div>
 
-            <div style={{ display: 'flex', gap: '12px', marginTop: '1.6rem' }}>
+            {/* Program Duration Selector */}
+            <div style={{ marginTop: '1.1rem' }}>
+              <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: '800', color: '#888', letterSpacing: '0.6px', marginBottom: '6px' }}>
+                PROGRAM DURATION (TOTAL WEEKS)
+              </label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                {DURATION_OPTIONS.map((w) => {
+                  const isSelected = durationWeeks === w;
+                  return (
+                    <button
+                      key={w}
+                      type="button"
+                      onClick={() => setDurationWeeks(w)}
+                      style={{
+                        flex: 1,
+                        padding: '0.6rem 0',
+                        borderRadius: '12px',
+                        border: '1px solid',
+                        borderColor: isSelected ? badgeColor : 'rgba(255, 255, 255, 0.1)',
+                        backgroundColor: isSelected ? 'rgba(52, 211, 153, 0.15)' : 'rgba(255, 255, 255, 0.03)',
+                        color: isSelected ? badgeColor : '#aaa',
+                        fontWeight: '800',
+                        fontSize: '0.8rem',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {w} Weeks
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Start Date Selector */}
+            <div style={{ marginTop: '1.1rem' }}>
+              <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: '800', color: '#888', letterSpacing: '0.6px', marginBottom: '6px' }}>
+                PLAN START DATE
+              </label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '0.65rem 0.85rem',
+                  borderRadius: '12px',
+                  border: '1px solid rgba(255, 255, 255, 0.12)',
+                  backgroundColor: 'rgba(255, 255, 255, 0.04)',
+                  color: '#ffffff',
+                  fontSize: '0.85rem',
+                  fontWeight: '700',
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', marginTop: '1.4rem' }}>
               <button type="button" onClick={onClose} style={wizardStyles.cancelBtn}>Cancel</button>
               <button
                 type="button"
@@ -469,11 +513,11 @@ export default function PlanWizard({ isOpen, onClose, onGenerate, badgeColor = '
           </div>
         )}
 
-        {/* ================= STEP 2: Program Style / Periodization ================= */}
+        {/* STEP 2: Program Style / Periodization */}
         {step === 2 && (
           <div>
             <p style={wizardStyles.stepDescription}>
-              Choose how your workouts rotate or progress across weeks:
+              Choose how your workouts rotate or progress across your {durationWeeks}-week program:
             </p>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '340px', overflowY: 'auto', paddingRight: '2px' }}>
@@ -519,10 +563,9 @@ export default function PlanWizard({ isOpen, onClose, onGenerate, badgeColor = '
           </div>
         )}
 
-        {/* ================= STEP 3: Assign Muscles to Days ================= */}
+        {/* STEP 3: Assign Muscles to Days */}
         {step === 3 && (
           <div>
-            {/* Periodization Tabs (Week A / Week B / Week C) */}
             {availableWeekTabs.length > 1 && (
               <div style={wizardStyles.periodizationTabs}>
                 {availableWeekTabs.map((wKey) => (
@@ -542,17 +585,15 @@ export default function PlanWizard({ isOpen, onClose, onGenerate, badgeColor = '
               </div>
             )}
 
-            {/* Target & Active Status Bar */}
             <div style={wizardStyles.statusBar}>
               <span style={{ color: '#888', fontSize: '0.78rem', fontWeight: '700' }}>
-                Target: {targetDays} Training Days
+                {targetDays} Days / Wk · {durationWeeks} Weeks Total
               </span>
               <span style={{ color: badgeColor, fontSize: '0.78rem', fontWeight: '800' }}>
                 {activeCount} Active Days in Week {activeTab}
               </span>
             </div>
 
-            {/* Days Split List */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '310px', overflowY: 'auto', paddingRight: '2px' }}>
               {DAYS.map((d) => {
                 const conf = currentPlan[d.id] || { active: false, muscles: [] };
@@ -608,7 +649,6 @@ export default function PlanWizard({ isOpen, onClose, onGenerate, badgeColor = '
                       )}
                     </div>
 
-                    {/* Muscle Groups Selection Dropdown */}
                     {isOpen && conf.active && (
                       <div style={wizardStyles.muscleDropdownGrid}>
                         {MAJOR_MUSCLE_GROUPS.map((mg) => {
@@ -653,10 +693,9 @@ export default function PlanWizard({ isOpen, onClose, onGenerate, badgeColor = '
           </div>
         )}
 
-        {/* ================= STEP 4: Review Exercises with Week & Muscle Filter ================= */}
+        {/* STEP 4: Review Exercises */}
         {step === 4 && (
           <div>
-            {/* Week Selector in Step 4 */}
             {availableWeekTabs.length > 1 && (
               <div style={{ ...wizardStyles.periodizationTabs, marginBottom: '0.6rem' }}>
                 {availableWeekTabs.map((wKey) => (
@@ -682,7 +721,6 @@ export default function PlanWizard({ isOpen, onClose, onGenerate, badgeColor = '
               </div>
             )}
 
-            {/* Day Selector Tabs */}
             <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '6px', marginBottom: '8px' }}>
               {DAYS.filter((d) => currentPlan[d.id]?.active).map((d) => (
                 <button
@@ -705,7 +743,6 @@ export default function PlanWizard({ isOpen, onClose, onGenerate, badgeColor = '
               ))}
             </div>
 
-            {/* Column Header Titles */}
             <div style={wizardStyles.tableColumnHeader}>
               <span style={{ flex: 1 }}>EXERCISE</span>
               <span style={{ width: '68px', textAlign: 'center' }}>SETS</span>
@@ -713,7 +750,6 @@ export default function PlanWizard({ isOpen, onClose, onGenerate, badgeColor = '
               <span style={{ width: '22px' }} />
             </div>
 
-            {/* Selected Exercises with Sets & Reps Steppers */}
             <div style={{ maxHeight: showInlinePicker ? '125px' : '210px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
               {currentDayExercises.map((exId) => {
                 const ex = (typeof exOr === 'function' ? exOr(exId) : null) || { id: exId, n: `Exercise #${exId}`, bp: 'General' };
@@ -755,7 +791,6 @@ export default function PlanWizard({ isOpen, onClose, onGenerate, badgeColor = '
               })}
             </div>
 
-            {/* Inline Exercise Selection Drawer Filtered by Target Muscle Groups */}
             {showInlinePicker ? (
               <div style={wizardStyles.inlinePickerCard}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
@@ -771,7 +806,6 @@ export default function PlanWizard({ isOpen, onClose, onGenerate, badgeColor = '
                   </button>
                 </div>
 
-                {/* Muscle Filter Chips */}
                 {currentDayMuscles.length > 1 && (
                   <div style={{ display: 'flex', gap: '4px', marginBottom: '6px', flexWrap: 'wrap' }}>
                     <button
@@ -858,7 +892,7 @@ export default function PlanWizard({ isOpen, onClose, onGenerate, badgeColor = '
                 onClick={handleGenerateRoutines}
                 style={{ ...wizardStyles.nextBtn, backgroundColor: badgeColor }}
               >
-                Generate Routines ⚔️
+                Generate {durationWeeks}-Week Plan ⚔️
               </button>
             </div>
           </div>

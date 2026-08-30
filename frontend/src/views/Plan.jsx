@@ -297,7 +297,6 @@ export default function Plan({ rankWeeks = null } = {}) {
     let updatedWeek = wizardData.updatedWeek;
     let updatedCfg = wizardData.updatedCfg || {};
 
-    // Fallback: If raw wizard answers were passed instead of built routines
     if ((!routines || routines.length === 0) && typeof generatePlanFromWizard === 'function') {
       const generated = generatePlanFromWizard(wizardData, S);
       if (generated) {
@@ -329,10 +328,13 @@ export default function Plan({ rankWeeks = null } = {}) {
         s.routines = routines;
         s.week = updatedWeek || s.week;
         s.cfg = { ...s.cfg, ...updatedCfg };
+        s.planStartDate = wizardData.startDate || new Date().toISOString().slice(0, 10);
+        s.planDurationWeeks = wizardData.durationWeeks || 8;
+        s.programStyle = wizardData.programStyle || 'ab_alternating';
       });
     }
 
-    setImportMsg(`⚔️ Custom plan generated with ${routines.length} routine(s)!`);
+    setImportMsg(`⚔️ Custom ${wizardData.durationWeeks || 8}-week plan generated with ${routines.length} routine(s)!`);
     setTimeout(() => setImportMsg(''), 4000);
   };
 
