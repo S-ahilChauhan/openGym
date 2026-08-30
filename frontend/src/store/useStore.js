@@ -79,6 +79,17 @@ export const INITIAL_PROFILE = {
   photos: { front: null, side: null, back: null, date: null }
 }
 
+export const INITIAL_DIET = {
+  targets: {
+    calories: 2400,
+    protein: 180,
+    carbs: 250,
+    fat: 65,
+    water: 3.5
+  },
+  logs: {}
+}
+
 export const DEF = {
   unit: 'kg', 
   restSec: 90, 
@@ -101,7 +112,8 @@ export const DEF = {
   reminder: { on: false, time: '08:00', tz: null }, 
   effort: null,
   bioScan: INITIAL_BIO_SCAN,
-  profile: INITIAL_PROFILE
+  profile: INITIAL_PROFILE,
+  diet: INITIAL_DIET
 }
 
 const clone = o => JSON.parse(JSON.stringify(o))
@@ -171,6 +183,17 @@ export const useStore = create((set, get) => {
       persist(S, push)
     },
     replaceState(S, push = false) { persist(clone(S), push) },
+
+    logMacro(dateKey, field, amount) {
+      get().update((s) => {
+        if (!s.diet) s.diet = clone(INITIAL_DIET)
+        if (!s.diet.logs) s.diet.logs = {}
+        if (!s.diet.logs[dateKey]) {
+          s.diet.logs[dateKey] = { protein: 0, carbs: 0, fat: 0, water: 0, meals: [] }
+        }
+        s.diet.logs[dateKey][field] = Math.max(0, (s.diet.logs[dateKey][field] || 0) + amount)
+      })
+    },
 
     isGuest: () => localStorage.getItem('gym_guest') === '1',
     setGuest(v) { if (v) localStorage.setItem('gym_guest', '1'); else localStorage.removeItem('gym_guest'); set({}) },

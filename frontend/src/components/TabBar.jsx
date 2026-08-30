@@ -1,57 +1,126 @@
-// frontend/src/components/TabBar.jsx
+// frontend/src/components/Nav.jsx
+import React from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { useStore } from '../store/useStore.js'
-import { effectiveRoutine } from '../lib/history.js'
-import { todayISO } from '../lib/format.js'
-import { t } from '../lib/i18n.js'
 import Icon from './Icon.jsx'
+import { t } from '../lib/i18n.js'
 
-export default function TabBar({ onStart }) {
+const NAV_ITEMS = [
+  { path: '/', label: 'Home', icon: 'home' },
+  { path: '/plan', label: 'Plan', icon: 'calendar' },
+  { path: '/workout', label: 'Start', icon: 'dumbbell', isCenter: true },
+  { path: '/diet', label: 'Diet', icon: 'utensils' },
+  { path: '/stats', label: 'Stats', icon: 'stats' },
+]
+
+export default function Nav() {
+  const location = useLocation()
   const nav = useNavigate()
-  const loc = useLocation()
-  const S = useStore(s => s.S)
-  const user = useStore(s => s.user)
-  const isGuest = useStore(s => s.isGuest())
-  if (!user && !isGuest) return null
-
-  const cur = loc.pathname.split('/')[1] || 'home'
-  const on = k => cur === k || (cur === 'history' && k === 'stats') || (cur === 'settings' && k === 'profile')
-
-  const startWorkout = () => {
-    if (!S.active) {
-      const r = effectiveRoutine(S, todayISO())
-      if (r && r.ex.length) { onStart(r.id); return }
-    }
-    nav('/workout')
-  }
+  const currentPath = location.pathname
 
   return (
-    <nav id="tabbar">
-      <button className={on('home') ? 'on' : ''} onClick={() => nav('/home')}>
-        <Icon name="house" /><span>{t('Home')}</span>
-      </button>
+    <nav style={styles.bar}>
+      {NAV_ITEMS.map((item) => {
+        const isActive =
+          item.path === '/'
+            ? currentPath === '/'
+            : currentPath.startsWith(item.path)
 
-      <button className={on('plan') ? 'on' : ''} onClick={() => nav('/plan')}>
-        <Icon name="calendar" /><span>{t('Plan')}</span>
-      </button>
+        if (item.isCenter) {
+          return (
+            <button
+              key={item.path}
+              type="button"
+              onClick={() => nav(item.path)}
+              style={styles.centerBtn}
+              aria-label={t(item.label)}
+            >
+              <div style={styles.centerDisc}>
+                <Icon name={item.icon} style={{ fontSize: '1.45rem', color: '#000' }} />
+              </div>
+              <span style={{ fontSize: '0.68rem', fontWeight: '800', color: '#34D399', marginTop: '3px' }}>
+                {t(item.label)}
+              </span>
+            </button>
+          )
+        }
 
-      <button className={'start' + (S.active ? ' rec' : '')} onClick={startWorkout}>
-        <span className="cir"><Icon name={S.active ? 'play' : 'dumbbell'} /></span>
-        <span>{S.active ? t('Resume') : t('Start')}</span>
-      </button>
-
-      <button className={on('stats') ? 'on' : ''} onClick={() => nav('/stats')}>
-        <Icon name="chart" /><span>{t('Stats')}</span>
-      </button>
-
-      {/* Direct, crash-proof Profile Tab Button */}
-      <button className={on('profile') ? 'on' : ''} onClick={() => nav('/profile')}>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-          <circle cx="12" cy="7" r="4"></circle>
-        </svg>
-        <span>{t('Profile') || 'Profile'}</span>
-      </button>
+        return (
+          <button
+            key={item.path}
+            type="button"
+            onClick={() => nav(item.path)}
+            style={{
+              ...styles.navItem,
+              color: isActive ? '#34D399' : '#777782',
+            }}
+          >
+            <Icon name={item.icon} style={{ fontSize: '1.3rem' }} />
+            <span
+              style={{
+                fontSize: '0.7rem',
+                fontWeight: isActive ? '800' : '600',
+                marginTop: '4px',
+              }}
+            >
+              {t(item.label)}
+            </span>
+          </button>
+        )
+      })}
     </nav>
   )
+}
+
+const styles = {
+  bar: {
+    position: 'fixed',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: '64px',
+    backgroundColor: 'rgba(10, 10, 14, 0.94)',
+    backdropFilter: 'blur(20px)',
+    WebkitBackdropFilter: 'blur(20px)',
+    borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+    display: 'flex',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    zIndex: 9000,
+    padding: '0 0.5rem',
+    boxSizing: 'border-box',
+  },
+  navItem: {
+    background: 'none',
+    border: 'none',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+    flex: 1,
+    padding: '6px 0',
+    transition: 'color 0.2s ease',
+  },
+  centerBtn: {
+    background: 'none',
+    border: 'none',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+    flex: 1,
+    position: 'relative',
+    top: '-8px',
+  },
+  centerDisc: {
+    width: '46px',
+    height: '46px',
+    borderRadius: '50%',
+    backgroundColor: '#34D399',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    boxShadow: '0 4px 18px rgba(52, 211, 153, 0.45)',
+  },
 }

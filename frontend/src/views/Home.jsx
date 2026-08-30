@@ -3,13 +3,14 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore, DEF } from '../store/useStore.js'
 import { effectiveRoutine, effectiveRoutineId, lastBW } from '../lib/history.js'
-import { fmtNum, fmtDate, todayISO, isoOf, weekKey, DAYS } from '../lib/format.js'
+import { fmtNum, fmtDate, todayISO, isoOf, DAYS } from '../lib/format.js'
 import { t as defaultT, dateLocale } from '../lib/i18n.js'
 import { getStreakRank, calculateStreakDays } from '../utils/ranks.js'
 import { bwSheet, goalSheet, dayOverrideSheet, calendarSheet, startFlow, loadStarterPlan, bwDeltaColor } from '../sheets.jsx'
 import LineChart from '../components/LineChart.jsx'
 import Icon from '../components/Icon.jsx'
 import { Button } from '../components/ui.jsx'
+import MacroFuelGrid from '../components/MacroFuelGrid.jsx'
 
 export default function Home({ onNavigate, state, dispatch, t: propT, rankDays = null } = {}) {
   const routerNavigate = useNavigate()
@@ -23,12 +24,12 @@ export default function Home({ onNavigate, state, dispatch, t: propT, rankDays =
     routines: (state || storedState)?.routines || [],
     workouts: (state || storedState)?.workouts || [],
     week: (state || storedState)?.week || {},
-    dayPlan: (state || storedState)?.dayPlan || {}
+    dayPlan: (state || storedState)?.dayPlan || {},
+    diet: (state || storedState)?.diet || DEF.diet
   }
   const user = useStore(s => s.user)
   const t = typeof propT === 'function' ? propT : defaultT
 
-  // Prioritize Warrior Call-Sign from Profile settings
   const localProfile = JSON.parse(localStorage.getItem('openGym_profile') || '{}')
   const greetingName =
     S?.profile?.name ||
@@ -40,9 +41,10 @@ export default function Home({ onNavigate, state, dispatch, t: propT, rankDays =
   const [weekOffset, setWeekOffset] = useState(0)
 
   const today = new Date()
-  const routine = effectiveRoutine(S, todayISO())
+  const todayDateISO = todayISO()
+  const routine = effectiveRoutine(S, todayDateISO)
+  const isRestDay = !routine && !S.active
   
-  // Calculate day-based streak and rank progression
   const streakDaysCount = rankDays ?? calculateStreakDays(S.workouts)
   const rank = getStreakRank(streakDaysCount)
   const isZeroStreak = streakDaysCount === 0
@@ -60,50 +62,63 @@ export default function Home({ onNavigate, state, dispatch, t: propT, rankDays =
     const eff = effectiveRoutineId(S, iso), ovr = S.dayPlan[iso] !== undefined, done = doneDays.has(iso)
     const dot = done ? ' done' : ovr && eff ? ' ovr' : eff ? ' plan' : ''
     strip.push(
-      <div key={i} className={'wday' + (iso === todayISO() ? ' today' : '')} onClick={() => dayOverrideSheet(iso)}>
+      <div key={i} className={'wday' + (iso === todayDateISO ? ' today' : '')} onClick={() => dayOverrideSheet(iso)}>
         <div className="lbl">{t(DAYS[d.getDay()])}</div>
         <div className="num">{d.getDate()}</div>
         <div className={'dot' + dot} />
       </div>
     )
   }
-  const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6)
-  const wkLabel = weekOffset === 0 ? t('This week') : `${monday.getDate()} ${monday.toLocaleDateString(dateLocale(), { month: 'short' })} – ${sunday.getDate()} ${sunday.toLocaleDateString(dateLocale(), { month: 'short' })}`
 
-  const wThisWeek = S.workouts.filter(w => weekKey(w.d) === weekKey(todayISO())).length
-  const plannedPerWeek = Object.keys(S.week).filter(k => S.week[k]).length
   const bwPoints = S.bodyweight.slice(-30).map(b => ({ t: b.t || new Date(b.d).getTime(), y: b.w, d: b.d }))
 
   const onToday = () => {
     if (S.active) nav('/workout')
     else if (routine) startFlow(routine.id)
-    else dayOverrideSheet(todayISO())
+    else dayOverrideSheet(todayDateISO)
   }
 
   return (
     <div className="narrow" style={hudStyles.container}>
-      {/* Top Header */}
+      {/* 1. Header with Level & Direct Profile Badge */}
       <div className="hdr" style={hudStyles.header}>
         <div style={{ textAlign: 'left', margin: 0, padding: 0 }}>
           <div style={{ ...hudStyles.dateLabel, color: rank.badgeColor }}>
             {today.toLocaleDateString(dateLocale(), { weekday: 'long', day: 'numeric', month: 'long' }).toUpperCase()}
           </div>
-          <h1 style={{ ...hudStyles.title, textAlign: 'left', margin: '0.15rem 0 0.4rem' }}>
+          <h1 style={{ ...hudStyles.title, textAlign: 'left', margin: '0.15rem 0 0.35rem' }}>
             Hi {greetingName}
           </h1>
-          <div
-            style={{
-              ...hudStyles.rankBadge,
-              color: rank.badgeColor,
-              borderColor: rank.badgeColor,
-              boxShadow: `0 0 10px ${rank.glowColor}`
-            }}
-          >
-            ⚔️ LVL {rank.level} · {rank.fullTitle}
+
+          {/* LEVEL BADGE + GO TO PROFILE ACTION ROW */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <div
+              style={{
+                ...hudStyles.rankBadge,
+                color: rank.badgeColor,
+                borderColor: rank.badgeColor,
+                boxShadow: `0 0 10px ${rank.glowColor}`
+              }}
+            >
+              ⚔️ LVL {rank.level} · {rank.fullTitle}
+            </div>
+
+            {/* Profile Navigation Pill */}
+            <button
+              type="button"
+              onClick={() => nav('/profile')}
+              style={{
+                ...hudStyles.profileLinkBtn,
+                borderColor: 'rgba(255, 255, 255, 0.15)',
+              }}
+            >
+              <Icon name="user" style={{ fontSize: '0.75rem', color: rank.badgeColor }} />
+              <span>Profile ➔</span>
+            </button>
           </div>
         </div>
 
-        {/* Header Compact Streak Pill */}
+        {/* Streak Button */}
         <button
           className="iconbtn"
           style={{
@@ -121,7 +136,7 @@ export default function Home({ onNavigate, state, dispatch, t: propT, rankDays =
         </button>
       </div>
 
-      {/* Hero Streak Card */}
+      {/* 2. Hero Streak Card */}
       <div style={hudStyles.streakHeroCard} onClick={() => calendarSheet()}>
         <div
           style={{
@@ -131,26 +146,10 @@ export default function Home({ onNavigate, state, dispatch, t: propT, rankDays =
         />
 
         <div style={hudStyles.streakHeroContent}>
-          {/* Circular Progress & Flame Disc */}
           <div style={hudStyles.ringWrapper}>
             <svg viewBox="0 0 44 44" style={hudStyles.svgRing}>
-              {/* Inner subtle disc */}
-              <circle
-                cx="22"
-                cy="22"
-                r="17"
-                fill="rgba(255, 255, 255, 0.03)"
-              />
-              {/* Background Track */}
-              <circle
-                cx="22"
-                cy="22"
-                r="17"
-                fill="none"
-                stroke="rgba(255, 255, 255, 0.09)"
-                strokeWidth="2.8"
-              />
-              {/* Dynamic Progress Indicator */}
+              <circle cx="22" cy="22" r="17" fill="rgba(255, 255, 255, 0.03)" />
+              <circle cx="22" cy="22" r="17" fill="none" stroke="rgba(255, 255, 255, 0.09)" strokeWidth="2.8" />
               <circle
                 cx="22"
                 cy="22"
@@ -175,19 +174,16 @@ export default function Home({ onNavigate, state, dispatch, t: propT, rankDays =
             </div>
           </div>
 
-          {/* Text Details & Level Up Countdown */}
           <div style={hudStyles.streakTextCol}>
             <div style={hudStyles.rankEyebrow}>
               <span style={{ color: isZeroStreak ? '#888' : rank.badgeColor, fontWeight: '800' }}>
                 {isZeroStreak ? 'IGNITE STREAK' : rank.fullTitle.toUpperCase()}
               </span>
             </div>
-
             <div style={hudStyles.streakNumberRow}>
               <span style={hudStyles.streakNumHero}>{streakDaysCount}</span>
               <span style={hudStyles.unitTextHero}>{streakDaysCount === 1 ? 'DAY' : 'DAYS'}</span>
             </div>
-
             <div style={hudStyles.subtextHero}>
               {rank.nextRankTitle ? (
                 <span style={{ color: rank.badgeColor, fontWeight: '700' }}>
@@ -205,7 +201,7 @@ export default function Home({ onNavigate, state, dispatch, t: propT, rankDays =
         </div>
       </div>
 
-      {/* Weekly Discipline Card */}
+      {/* 3. Weekly Discipline Card */}
       <div className="card" style={hudStyles.card}>
         <div className="row between" style={{ ...hudStyles.sectionHeader, marginBottom: 12 }}>
           <button className="iconbtn" style={{ width: 30, height: 30, fontSize: 15 }} onClick={() => setWeekOffset(w => w - 1)} aria-label="Previous week">
@@ -225,7 +221,7 @@ export default function Home({ onNavigate, state, dispatch, t: propT, rankDays =
       </div>
 
       {!S.routines.length && !S.active && (
-        <div className="card">
+        <div className="card" style={hudStyles.card}>
           <div className="row" style={{ gap: 10, marginBottom: 6 }}>
             <span className="lrow-i"><Icon name="sparkles" /></span>
             <div className="big" style={{ fontSize: 22 }}>{t('Welcome!')}</div>
@@ -239,42 +235,52 @@ export default function Home({ onNavigate, state, dispatch, t: propT, rankDays =
         </div>
       )}
 
-      {/* Hero Blade Card */}
-      <div className="card" style={hudStyles.heroCard}>
+      {/* 4. Today's Blade */}
+      <div style={{ ...hudStyles.heroCard, borderColor: `${rank.badgeColor}40` }}>
         <div className="row between" style={hudStyles.heroTop}>
           <span style={{ ...hudStyles.todayTag, color: rank.badgeColor }}>{t("TODAY'S BLADE")}</span>
-          <span style={hudStyles.timeTag}>{routine ? `${routine.exercises?.length || 0} ${t('EXERCISES')}` : t('REST DAY')}</span>
+          <span style={{ ...hudStyles.timeTag, color: isRestDay ? '#888' : rank.badgeColor, fontWeight: 700 }}>
+            {S.active ? t('IN PROGRESS') : routine ? `${routine.exercises?.length || 0} ${t('EXERCISES')}` : t('REST PROTOCOL')}
+          </span>
         </div>
-        <h2 style={hudStyles.heroTitle}>{routine ? routine.name.toUpperCase() : t('REST DAY')}</h2>
+
+        <h2 style={hudStyles.heroTitle}>
+          {S.active ? t('Active Workout') : routine ? routine.name.toUpperCase() : t('Rest & Recovery')}
+        </h2>
+
         <p style={hudStyles.heroDesc}>
-          {routine ? t('{0} exercises scheduled for today', routine.exercises?.length || 0) : t('Recover today. Return stronger tomorrow.')}
+          {S.active
+            ? t('You have an active workout in progress.')
+            : routine
+            ? t('{0} exercises scheduled for today', routine.exercises?.length || 0)
+            : t('"A blade is forged in fire, but tempered in stillness."')}
         </p>
-        <Button
-          variant="primary"
-          icon="play"
-          onClick={onToday}
-          style={{ ...hudStyles.unleashBtn, backgroundColor: rank.badgeColor }}
-        >
-          {S.active ? t('Resume workout') : routine ? t('Begin session') : t('Plan today')}
-        </Button>
+
+        {!isRestDay && (
+          <Button
+            variant="primary"
+            icon={S.active ? 'play' : 'zap'}
+            onClick={onToday}
+            style={{ ...hudStyles.unleashBtn, backgroundColor: rank.badgeColor, color: '#000' }}
+          >
+            {S.active ? t('Resume workout ⚔️') : t('Begin session ⚔️')}
+          </Button>
+        )}
       </div>
 
-      {/* Body Weight Stat */}
-      <div style={hudStyles.grid}>
-        <div className="card" style={hudStyles.statCard} onClick={() => bwSheet()}>
-          <div style={hudStyles.statLabel}>{t('Body weight')}</div>
-          <div style={hudStyles.statVal}>
-            {bw ? `${fmtNum(bw.w)} ` : '—'}
-            {bw && <span style={hudStyles.unit}>{S.unit}</span>}
-          </div>
-          <div style={{ ...hudStyles.statAction, color: rank.badgeColor }}>+ {t('Log entry')}</div>
-        </div>
+      {/* 5. Daily Macro Grid (Tap jumps straight to /diet) */}
+      <div style={{ marginBottom: '1.2rem' }}>
+        <MacroFuelGrid
+          dietData={S.diet}
+          dateKey={todayDateISO}
+          onOpenDiet={() => nav('/diet')}
+        />
       </div>
 
-      {/* Body Weight Chart Card */}
+      {/* 6. Body Weight Tracker */}
       <div className="card" style={hudStyles.card}>
         <div className="row between" style={{ marginBottom: 6 }}>
-          <h2 style={{ margin: 0 }}>{t('Body weight')}</h2>
+          <h2 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800 }}>{t('Body weight')}</h2>
           <div className="row" style={{ gap: 8 }}>
             <Button size="sm" icon="target" style={S.targetW ? { color: 'var(--yellow)' } : undefined} onClick={goalSheet}>
               {S.targetW ? fmtNum(S.targetW) : t('Goal')}
@@ -315,12 +321,12 @@ export default function Home({ onNavigate, state, dispatch, t: propT, rankDays =
 }
 
 const frostedCardStyle = {
-  backgroundColor: 'rgba(18, 18, 22, 0.75)',
+  backgroundColor: 'rgba(16, 16, 22, 0.65)',
   backdropFilter: 'blur(16px)',
   WebkitBackdropFilter: 'blur(16px)',
-  border: '1px solid rgba(255, 255, 255, 0.1)',
-  borderRadius: '20px',
-  boxShadow: '0 8px 30px rgba(0, 0, 0, 0.4)'
+  border: '1px solid rgba(255, 255, 255, 0.08)',
+  borderRadius: '22px',
+  boxShadow: '0 8px 30px rgba(0, 0, 0, 0.45)'
 }
 
 const hudStyles = {
@@ -331,23 +337,37 @@ const hudStyles = {
     backgroundColor: 'transparent',
     color: '#fff',
     boxSizing: 'border-box',
-    overflowX: 'hidden'
+    overflowX: 'hidden',
+    paddingBottom: '5rem'
   },
   header: {
     position: 'relative',
     zIndex: 2,
     width: '100%',
-    maxWidth: '100%',
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    margin: '0 0 1.2rem',
-    padding: '1.8rem 1rem 0.4rem',
+    margin: '0 0 1rem',
+    padding: '1.6rem 1rem 0.2rem',
     boxSizing: 'border-box'
   },
-  dateLabel: { fontSize: '0.72rem', fontWeight: '700', letterSpacing: '1px', textTransform: 'uppercase' },
-  title: { fontSize: '1.8rem', fontWeight: '800', margin: '0.15rem 0 0.4rem', letterSpacing: '-0.5px', textShadow: '0 2px 10px rgba(0, 0, 0, 0.85)' },
-  rankBadge: { display: 'inline-flex', alignItems: 'center', gap: '5px', border: '1px solid', borderRadius: '16px', padding: '0.2rem 0.65rem', fontSize: '0.72rem', fontWeight: '700', backgroundColor: 'rgba(0,0,0,0.6)' },
+  dateLabel: { fontSize: '0.68rem', fontWeight: '800', letterSpacing: '1px', textTransform: 'uppercase' },
+  title: { fontSize: '1.8rem', fontWeight: '900', margin: '0.15rem 0 0.35rem', letterSpacing: '-0.5px', textShadow: '0 2px 10px rgba(0, 0, 0, 0.85)' },
+  rankBadge: { display: 'inline-flex', alignItems: 'center', gap: '5px', border: '1px solid', borderRadius: '16px', padding: '0.2rem 0.65rem', fontSize: '0.72rem', fontWeight: '800', backgroundColor: 'rgba(0,0,0,0.6)' },
+  profileLinkBtn: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '4px',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    border: '1px solid',
+    borderRadius: '16px',
+    padding: '0.2rem 0.65rem',
+    color: '#fff',
+    fontSize: '0.72rem',
+    fontWeight: '700',
+    cursor: 'pointer',
+    backdropFilter: 'blur(8px)',
+  },
   streakPill: {
     display: 'flex',
     alignItems: 'center',
@@ -358,85 +378,34 @@ const hudStyles = {
     padding: '0.35rem 0.75rem',
     cursor: 'pointer',
     backdropFilter: 'blur(12px)',
-    WebkitBackdropFilter: 'blur(12px)'
   },
   streakNum: { fontSize: '0.95rem', fontWeight: '900', color: '#fff' },
 
-  // Hero Streak Card Styles
-  streakHeroCard: {
-    position: 'relative',
-    zIndex: 2,
-    ...frostedCardStyle,
-    borderRadius: '22px',
-    padding: '1rem 1.25rem',
-    marginBottom: '1.2rem',
-    cursor: 'pointer',
-    overflow: 'hidden'
-  },
-  ambientGlow: {
-    position: 'absolute',
-    top: '-30%',
-    left: '10%',
-    width: '110px',
-    height: '110px',
-    borderRadius: '50%',
-    filter: 'blur(40px)',
-    pointerEvents: 'none',
-    opacity: 0.45
-  },
-  streakHeroContent: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '1.15rem'
-  },
-  ringWrapper: {
-    position: 'relative',
-    width: '48px',
-    height: '48px',
-    flexShrink: 0,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
+  streakHeroCard: { position: 'relative', zIndex: 2, ...frostedCardStyle, padding: '1rem 1.25rem', marginBottom: '1rem', cursor: 'pointer', overflow: 'hidden' },
+  ambientGlow: { position: 'absolute', top: '-30%', left: '10%', width: '110px', height: '110px', borderRadius: '50%', filter: 'blur(40px)', pointerEvents: 'none', opacity: 0.45 },
+  streakHeroContent: { display: 'flex', alignItems: 'center', gap: '1.15rem' },
+  ringWrapper: { position: 'relative', width: '48px', height: '48px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' },
   svgRing: { width: '100%', height: '100%' },
-  ringCenter: {
-    position: 'absolute',
-    inset: 0,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
+  ringCenter: { position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' },
   streakTextCol: { display: 'flex', flexDirection: 'column' },
-  rankEyebrow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-    fontSize: '0.66rem',
-    letterSpacing: '1px',
-    marginBottom: '1px'
-  },
+  rankEyebrow: { display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.66rem', letterSpacing: '1px', marginBottom: '1px' },
   streakNumberRow: { display: 'flex', alignItems: 'baseline', gap: '6px', lineHeight: 1.1 },
   streakNumHero: { fontSize: '1.65rem', fontWeight: '900', color: '#fff', letterSpacing: '-0.5px' },
   unitTextHero: { fontSize: '0.78rem', fontWeight: '800', color: 'rgba(255, 255, 255, 0.5)', letterSpacing: '0.5px' },
-  subtextHero: { fontSize: '0.72rem', color: 'rgba(255, 255, 255, 0.45)', marginTop: '2px', fontWeight: '500' },
+  subtextHero: { fontSize: '0.72rem', color: 'rgba(255, 255, 255, 0.5)', marginTop: '2px', fontWeight: '600' },
 
-  card: { position: 'relative', zIndex: 2, ...frostedCardStyle, borderRadius: '22px', padding: '1.1rem', marginBottom: '1.2rem' },
+  card: { position: 'relative', zIndex: 2, ...frostedCardStyle, padding: '1.1rem', marginBottom: '1rem' },
   sectionHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.7rem', fontWeight: '700', letterSpacing: '0.8px' },
-  cardTitle: { fontSize: '0.7rem', fontWeight: '700', letterSpacing: '0.8px', color: '#aaa' },
-  highlightBadge: { fontSize: '0.7rem', fontWeight: '700', whiteSpace: 'nowrap' },
+  cardTitle: { fontSize: '0.7rem', fontWeight: '800', letterSpacing: '0.8px', color: '#888' },
+  highlightBadge: { fontSize: '0.7rem', fontWeight: '800', whiteSpace: 'nowrap' },
   weekRow: { display: 'flex', justifyContent: 'space-between', gap: '0.35rem' },
   dayBox: { flex: 1, minWidth: 0, textAlign: 'center' },
-  heroCard: { backgroundColor: 'rgba(22, 22, 28, 0.85)', border: '1px solid rgba(255, 133, 162, 0.35)', borderRadius: '24px', padding: '1.35rem', marginBottom: '1.2rem', boxShadow: '0 8px 30px rgba(0, 0, 0, 0.55)' },
-  heroTop: { display: 'flex', justifyContent: 'space-between', gap: '0.75rem', marginBottom: '0.5rem' },
-  todayTag: { fontSize: '0.7rem', fontWeight: '800', letterSpacing: '1px' },
-  timeTag: { fontSize: '0.75rem', color: '#aaa' },
-  heroTitle: { fontSize: '1.35rem', fontWeight: '800', margin: '0.2rem 0 0.4rem' },
-  heroDesc: { fontSize: '0.8rem', color: '#999', margin: '0 0 1.2rem', lineHeight: '1.25rem' },
-  unleashBtn: { width: '100%', color: '#0e0e12', fontWeight: '800' },
-  grid: { position: 'relative', zIndex: 2, display: 'flex', gap: '0.85rem', marginBottom: '1.2rem' },
-  statCard: { flex: 1, backgroundColor: 'rgba(18, 18, 22, 0.75)', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '20px', padding: '1.1rem', backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', cursor: 'pointer' },
-  statVal: { fontSize: '1.35rem', fontWeight: '800', margin: '0.45rem 0 0.2rem' },
-  statLabel: { fontSize: '0.72rem', color: '#888', fontWeight: '600' },
-  statAction: { fontSize: '0.75rem', fontWeight: '600', marginTop: '0.4rem' },
-  unit: { fontSize: '0.85rem', color: '#aaa', fontWeight: '500' }
+
+  heroCard: { position: 'relative', zIndex: 2, ...frostedCardStyle, border: '1px solid', padding: '1.25rem', marginBottom: '1rem' },
+  heroTop: { display: 'flex', justifyContent: 'space-between', gap: '0.75rem', marginBottom: '0.4rem' },
+  todayTag: { fontSize: '0.68rem', fontWeight: '800', letterSpacing: '1px' },
+  timeTag: { fontSize: '0.72rem' },
+  heroTitle: { fontSize: '1.35rem', fontWeight: '900', margin: '0.2rem 0 0.35rem', color: '#fff' },
+  heroDesc: { fontSize: '0.78rem', color: '#999', margin: 0, fontStyle: 'italic', lineHeight: '1.35rem' },
+  unleashBtn: { width: '100%', marginTop: '1rem', fontWeight: '900', borderRadius: '14px' }
 }
