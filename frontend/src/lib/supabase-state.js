@@ -8,7 +8,6 @@ export async function fetchUserState() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Not authenticated')
 
-  // Fetch all rows from your public.entries table
   const { data: entries, error } = await supabase
     .from('entries')
     .select('*')
@@ -21,16 +20,16 @@ export async function fetchUserState() {
 
   if (!entries || entries.length === 0) return null
 
-  // Reconstruct your app state blob from the daily entries rows
   const reconstructedState = {
     workouts: [],
     bodyweight: [],
+    profile: {},
+    bioScan: {},
     diet: { targets: { calories: 2400, protein: 180, carbs: 250, fat: 65, water: 3.5 }, logs: {} },
     _ts: Date.now()
   }
 
   entries.forEach(entry => {
-    // Collect workouts
     if (entry.workout) {
       if (Array.isArray(entry.workout)) {
         reconstructedState.workouts.push(...entry.workout)
@@ -39,7 +38,6 @@ export async function fetchUserState() {
       }
     }
 
-    // Collect weight entries
     if (entry.weight !== null && entry.weight !== undefined) {
       reconstructedState.bodyweight.push({
         date: entry.date,
@@ -47,9 +45,16 @@ export async function fetchUserState() {
       })
     }
 
-    // Collect diet logs by date key
     if (entry.diet && entry.date) {
       reconstructedState.diet.logs[entry.date] = entry.diet
+    }
+
+    // Grab the latest profile and bioscan data found in entries
+    if (entry.profile && Object.keys(reconstructedState.profile).length === 0) {
+      reconstructedState.profile = entry.profile
+    }
+    if (entry.bioscan && Object.keys(reconstructedState.bioScan).length === 0) {
+      reconstructedState.bioScan = entry.bioscan
     }
   })
 
@@ -57,13 +62,12 @@ export async function fetchUserState() {
 }
 
 /**
- * Save every piece of data from your app state into public.entries by date
+ * Save every piece of data (Profile, BioScan, Workouts, Weight, Diet) into public.entries
  */
 export async function saveUserState(stateBlob) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Not authenticated')
 
-  // 1. Sanitize the state blob to prevent Postgres 22P05 unicode/null-byte errors
   let cleanBlob = stateBlob
   try {
     const rawString = JSON.stringify(stateBlob)
@@ -73,48 +77,55 @@ export async function saveUserState(stateBlob) {
     console.warn('Could not sanitize state blob:', err)
   }
 
-  // 2. Map and group all app data by date to upsert into public.entries
   const dateMap = {}
-
-  // Helper to get a YYYY-MM-DD date string
   const getDateKey = (dateInput) => {
     if (!dateInput) return new Date().toISOString().split('T')[0]
     return new Date(dateInput).toISOString().split('T')[0]
   }
 
-  // Group Workouts by date
+  const todayKey = getDateKey(new Date())
+  if (!dateMap[todayKey]) {
+    dateMap[todayKey] = { date: todayKey, workout: [], diet: null, weight: null, profile: cleanBlob.profile || null, bioscan: cleanBlob.bioScan || null }
+  }
+
+  // Group Workouts
   if (cleanBlob?.workouts && Array.isArray(cleanBlob.workouts)) {
     cleanBlob.workouts.forEach(w => {
       const dKey = getDateKey(w.date || w.completedAt || w.start)
-      if (!dateMap[dKey]) dateMap[dKey] = { date: dKey, workout: [], diet: null, weight: null }
+      if (!dateMap[dKey]) dateMap[dKey] = { date: dKey, workout: [], diet: null, weight: null, profile: null, bioscan: null }
       dateMap[dKey].workout.push(w)
     })
   }
 
-  // Group Bodyweight logs by date
+  // Group Bodyweight
   if (cleanBlob?.bodyweight && Array.isArray(cleanBlob.bodyweight)) {
     cleanBlob.bodyweight.forEach(bw => {
       const dKey = getDateKey(bw.date)
-      if (!dateMap[dKey]) dateMap[dKey] = { date: dKey, workout: [], diet: null, weight: null }
+      if (!dateMap[dKey]) dateMap[dKey] = { date: dKey, workout: [], diet: null, weight: null, profile: null, bioscan: null }
       dateMap[dKey].weight = bw.weight
     })
   }
 
-  // Group Diet logs by date
+  // Group Diet logs
   if (cleanBlob?.diet?.logs) {
     Object.entries(cleanBlob.diet.logs).forEach(([dateKey, dietData]) => {
       const dKey = getDateKey(dateKey)
-      if (!dateMap[dKey]) dateMap[dKey] = { date: dKey, workout: [], diet: null, weight: null }
+      if (!dateMap[dKey]) dateMap[dKey] = { date: dKey, workout: [], diet: null, weight: null, profile: null, bioscan: null }
       dateMap[dKey].diet = dietData
     })
   }
 
-  // 3. Send each date's data to your public.entries table
+  // Attach profile and bioscan to today's entry so they always save
+  dateMap[todayKey].profile = cleanBlob.profile || null
+  dateMap[todayKey].bioscan = cleanBlob.bioScan || null
+
   const entriesToUpsert = Object.values(dateMap).map(entry => ({
     date: entry.date,
     weight: entry.weight,
     workout: entry.workout.length > 0 ? entry.workout : null,
     diet: entry.diet,
+    profile: entry.profile,
+    bioscan: entry.bioscan,
     updated_at: new Date().toISOString()
   }))
 
