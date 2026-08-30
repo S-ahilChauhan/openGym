@@ -2,71 +2,130 @@
 import { supabase } from './supabase.js'
 
 /**
- * Fetch the user state blob or recent entries from Supabase
+ * Fetch and reconstruct the entire user state from public.entries
  */
 export async function fetchUserState() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Not authenticated')
 
-  // Option A: If you are still using an app_state table for overall sync
-  const { data, error } = await supabase
-    .from('app_state')
-    .select('state')
-    .eq('user_id', user.id)
-    .single()
+  // Fetch all rows from your public.entries table
+  const { data: entries, error } = await supabase
+    .from('entries')
+    .select('*')
+    .order('date', { ascending: false })
 
-  if (error && error.code !== 'PGRST116') {
-    console.error('Error fetching state:', error)
+  if (error) {
+    console.error('Error fetching entries:', error)
     throw error
   }
 
-  return data?.state || null
+  if (!entries || entries.length === 0) return null
+
+  // Reconstruct your app state blob from the daily entries rows
+  const reconstructedState = {
+    workouts: [],
+    bodyweight: [],
+    diet: { targets: { calories: 2400, protein: 180, carbs: 250, fat: 65, water: 3.5 }, logs: {} },
+    _ts: Date.now()
+  }
+
+  entries.forEach(entry => {
+    // Collect workouts
+    if (entry.workout) {
+      if (Array.isArray(entry.workout)) {
+        reconstructedState.workouts.push(...entry.workout)
+      } else {
+        reconstructedState.workouts.push(entry.workout)
+      }
+    }
+
+    // Collect weight entries
+    if (entry.weight !== null && entry.weight !== undefined) {
+      reconstructedState.bodyweight.push({
+        date: entry.date,
+        weight: entry.weight
+      })
+    }
+
+    // Collect diet logs by date key
+    if (entry.diet && entry.date) {
+      reconstructedState.diet.logs[entry.date] = entry.diet
+    }
+  })
+
+  return reconstructedState
 }
 
 /**
- * Save the state blob back to Supabase and sync daily entries into public.entries
+ * Save every piece of data from your app state into public.entries by date
  */
 export async function saveUserState(stateBlob) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Not authenticated')
 
-  // 1. Sanitize JSON string to prevent Postgres 22P05 unicode/null-byte errors
+  // 1. Sanitize the state blob to prevent Postgres 22P05 unicode/null-byte errors
   let cleanBlob = stateBlob
   try {
     const rawString = JSON.stringify(stateBlob)
     const sanitizedString = rawString.replace(/\\u0000/g, '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '')
     cleanBlob = JSON.parse(sanitizedString)
   } catch (err) {
-    console.warn('Could not sanitize state blob, falling back to original:', err)
+    console.warn('Could not sanitize state blob:', err)
   }
 
-  // 2. Save entire state blob to app_state table (maintains your existing sync setup)
-  const { error } = await supabase
-    .from('app_state')
-    .upsert({
-      user_id: user.id,
-      state: cleanBlob,
-      updated_at: new Date().toISOString()
+  // 2. Map and group all app data by date to upsert into public.entries
+  const dateMap = {}
+
+  // Helper to get a YYYY-MM-DD date string
+  const getDateKey = (dateInput) => {
+    if (!dateInput) return new Date().toISOString().split('T')[0]
+    return new Date(dateInput).toISOString().split('T')[0]
+  }
+
+  // Group Workouts by date
+  if (cleanBlob?.workouts && Array.isArray(cleanBlob.workouts)) {
+    cleanBlob.workouts.forEach(w => {
+      const dKey = getDateKey(w.date || w.completedAt || w.start)
+      if (!dateMap[dKey]) dateMap[dKey] = { date: dKey, workout: [], diet: null, weight: null }
+      dateMap[dKey].workout.push(w)
     })
-
-  if (error) {
-    console.error('Error saving state to app_state:', error)
-    throw error
   }
 
-  // 3. (Optional) If you want to automatically mirror daily workouts/weights into your new public.entries table:
-  try {
-    if (cleanBlob?.workouts && Array.isArray(cleanBlob.workouts)) {
-      for (const workout of cleanBlob.workouts) {
-        if (!workout.date) continue
-        await supabase.from('entries').upsert({
-          date: workout.date.split('T')[0], // format as YYYY-MM-DD
-          workout: workout,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'date' })
-      }
+  // Group Bodyweight logs by date
+  if (cleanBlob?.bodyweight && Array.isArray(cleanBlob.bodyweight)) {
+    cleanBlob.bodyweight.forEach(bw => {
+      const dKey = getDateKey(bw.date)
+      if (!dateMap[dKey]) dateMap[dKey] = { date: dKey, workout: [], diet: null, weight: null }
+      dateMap[dKey].weight = bw.weight
+    })
+  }
+
+  // Group Diet logs by date
+  if (cleanBlob?.diet?.logs) {
+    Object.entries(cleanBlob.diet.logs).forEach(([dateKey, dietData]) => {
+      const dKey = getDateKey(dateKey)
+      if (!dateMap[dKey]) dateMap[dKey] = { date: dKey, workout: [], diet: null, weight: null }
+      dateMap[dKey].diet = dietData
+    })
+  }
+
+  // 3. Send each date's data to your public.entries table
+  const entriesToUpsert = Object.values(dateMap).map(entry => ({
+    date: entry.date,
+    weight: entry.weight,
+    workout: entry.workout.length > 0 ? entry.workout : null,
+    diet: entry.diet,
+    updated_at: new Date().toISOString()
+  }))
+
+  if (entriesToUpsert.length > 0) {
+    const { error } = await supabase
+      .from('entries')
+      .upsert(entriesToUpsert, { onConflict: 'date' })
+
+    if (error) {
+      console.error('Error saving entries to Supabase:', error)
+      throw error
     }
-  } catch (entryErr) {
-    console.warn('Could not sync individual entries to public.entries:', entryErr)
   }
 }
